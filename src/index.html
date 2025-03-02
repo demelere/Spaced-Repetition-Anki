@@ -14,16 +14,22 @@
         
         <div class="main-content">
             <div class="input-section">
-                <h2>Input Text</h2>
-                <div class="text-input-controls">
-                    <button id="pasteButton">Paste from Clipboard</button>
-                    <button id="clearButton">Clear</button>
+                <div class="input-header">
+                    <span style="font-size: 14px; color: #666;">Highlight text to create flashcards</span>
                 </div>
-                <div id="textInput" class="text-input" contenteditable="true"></div>
+                <div class="text-input-controls">
+                    <div>
+                        <button id="pasteButton">Paste from Clipboard</button>
+                        <button id="clearButton">Clear</button>
+                    </div>
+                </div>
+                <div id="textInput" class="text-input" contenteditable="true" placeholder="Paste or type your text here, then highlight sections to generate flashcards..."></div>
             </div>
             
             <div class="controls-section">
-                <button id="generateButton" disabled>Generate Cards from Selection</button>
+                <div class="controls-left">
+                    <button id="generateButton" disabled>Generate Cards from Selection</button>
+                </div>
                 <div class="deck-selection">
                     <label for="defaultDeck">Default Deck:</label>
                     <select id="defaultDeck">
@@ -39,7 +45,9 @@
             </div>
             
             <div class="cards-section">
-                <h2>Generated Cards <span id="cardCount">(0)</span></h2>
+                <div class="section-header">
+                    <span>Cards <span id="cardCount">(0)</span></span>
+                </div>
                 <div class="cards-controls">
                     <button id="exportButton" disabled>Export to Mochi</button>
                     <button id="clearCardsButton" disabled>Clear All Cards</button>

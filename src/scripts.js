@@ -41,31 +41,106 @@ document.addEventListener('DOMContentLoaded', () => {
     // Enable the button if there's already text in the selection
     handleTextSelection();
     
+    // Prevent scrolling the page when mouse wheel is used over the text input
+    textInput.addEventListener('wheel', function(e) {
+        const contentHeight = this.scrollHeight;
+        const visibleHeight = this.clientHeight;
+        const scrollTop = this.scrollTop;
+        
+        // Check if we're at the top or bottom boundary
+        const isAtTop = scrollTop === 0;
+        const isAtBottom = scrollTop + visibleHeight >= contentHeight - 1;
+        
+        // If we're at a boundary and trying to scroll further in that direction, 
+        // let the page scroll normally
+        if ((isAtTop && e.deltaY < 0) || (isAtBottom && e.deltaY > 0)) {
+            return;
+        }
+        
+        // Otherwise, scroll the text input and prevent page scrolling
+        e.preventDefault();
+        this.scrollTop += e.deltaY;
+    }, { passive: false });
+    
     // Functions
     function pasteFromClipboard() {
+        // Access clipboard and paste with formatting
         navigator.clipboard.readText()
             .then(text => {
-                // Create a text node instead of using innerHTML for security
-                const sanitizedText = document.createTextNode(text);
+                // For direct button click paste, we'll try to preserve markdown-like formatting
                 
                 // Clear the input first
                 textInput.innerHTML = '';
                 
-                // Create and append paragraph elements for each line
-                text.split('\n').forEach(line => {
-                    const p = document.createElement('p');
-                    p.textContent = line;
-                    textInput.appendChild(p);
-                });
+                // Convert plain text with markdown-like syntax to HTML
+                let formattedHtml = convertMarkdownToHtml(text);
+                
+                // Insert as HTML to preserve basic formatting
+                textInput.innerHTML = formattedHtml;
                 
                 // Check for selection
                 handleTextSelection();
             })
             .catch(err => {
                 console.error('Failed to read clipboard contents: ', err);
-                alert('Cannot access clipboard. Please paste manually.');
+                alert('Cannot access clipboard. Please paste manually or use Ctrl+V/Cmd+V.');
             });
     }
+    
+    // Simple function to convert markdown-like syntax to basic HTML
+    function convertMarkdownToHtml(text) {
+        // This is a very basic implementation
+        // Headings (# Heading)
+        text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+        text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+        text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+        
+        // Lists (- item)
+        text = text.replace(/^- (.+)$/gm, '<ul><li>$1</li></ul>');
+        
+        // Bold (**bold**)
+        text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        
+        // Italic (*italic*)
+        text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        
+        // Paragraphs (double newlines)
+        text = text.replace(/\n\n/g, '</p><p>');
+        
+        // Wrap in paragraphs if not already
+        if (!text.startsWith('<h') && !text.startsWith('<ul')) {
+            text = '<p>' + text + '</p>';
+        }
+        
+        return text;
+    }
+    
+    // Now allow regular paste with formatting
+    textInput.addEventListener('paste', function(e) {
+        // Let the browser handle the paste with formatting
+        // But we'll clean it up after
+        
+        // Need to wait for the paste to complete
+        setTimeout(() => {
+            // Clean up problematic elements
+            const images = textInput.querySelectorAll('img, video, iframe, object, embed');
+            images.forEach(img => img.remove());
+            
+            // Clean up styles that might be problematic
+            const allElements = textInput.querySelectorAll('*');
+            allElements.forEach(el => {
+                // Keep element but remove problematic attributes
+                el.removeAttribute('id');
+                el.removeAttribute('class');
+                el.style.fontFamily = '';
+                el.style.fontSize = '';
+                el.style.color = '';
+                el.style.backgroundColor = '';
+            });
+            
+            handleTextSelection();
+        }, 0);
+    });
     
     function clearTextInput() {
         textInput.innerHTML = '';
@@ -95,9 +170,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const defaultDeck = defaultDeckSelect.value;
         
         try {
+            // Update UI to show processing state
             generateButton.disabled = true;
             generateButton.textContent = 'Generating...';
             
+            // Store current selection for highlighting after API call
+            const savedRange = selection.getRangeAt(0).cloneRange();
+            
+            // Get cards from Claude API
             const cards = await callClaudeAPI(selectedText, defaultDeck);
             
             // Add generated cards to state
@@ -109,12 +189,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update buttons state
             updateButtonStates();
             
-            // Highlight the selected text
+            // Highlight the selection (after API call completes)
             highlightSelection();
             
         } catch (error) {
             console.error('Error generating cards:', error);
-            alert('Error generating cards. Please try again.');
+            alert('Error generating cards: ' + (error.message || 'Please try again.'));
         } finally {
             generateButton.disabled = false;
             generateButton.textContent = 'Generate Cards from Selection';
@@ -122,23 +202,44 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function highlightSelection() {
-        // This is a simplified version that would need to be enhanced
-        // to properly handle complex DOM structures
+        // Get the current selection
         const selection = window.getSelection();
         if (!selection.rangeCount) return;
         
-        const range = selection.getRangeAt(0);
-        const span = document.createElement('span');
-        span.className = 'highlight';
+        // Create a temporary marker for the selection
+        const marker = document.createElement('mark');
+        marker.className = 'highlight';
+        marker.style.backgroundColor = '#ffe066';
+        marker.style.padding = '0';
+        marker.style.margin = '0';
+        marker.style.borderRadius = '2px';
         
         try {
-            range.surroundContents(span);
+            // Get the range of the current selection
+            const range = selection.getRangeAt(0);
+            
+            // Check if the range is within our text input
+            if (!textInput.contains(range.commonAncestorContainer)) {
+                return;
+            }
+            
+            // Clone the range to avoid modifying the selection directly
+            const clonedRange = range.cloneRange();
+            
+            // Create a fragment of the selection
+            const contents = clonedRange.extractContents();
+            
+            // Add the contents to our marker
+            marker.appendChild(contents);
+            
+            // Insert the marker at the position of the selection
+            clonedRange.insertNode(marker);
+            
+            // Clear the selection
+            selection.removeAllRanges();
         } catch (e) {
-            console.warn('Could not highlight selection, possibly crosses DOM boundary', e);
+            console.warn('Could not highlight selection:', e);
         }
-        
-        // Clear the selection
-        selection.removeAllRanges();
     }
     
     function renderCards() {
