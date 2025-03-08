@@ -12,51 +12,55 @@
             <h1>Research & Podcast Prep Assistant</h1>
         </header>
         
-        <div class="main-content">
-            <div class="app-layout">
-                <div class="sidebar">
-                    <div class="sidebar-controls">
-                        <button id="generateButton" disabled>Generate Cards</button>
-                        <button id="generateQuestionsButton" disabled>Generate Questions</button>
-                    </div>
+        <main class="main-content">
+            <!-- Text Input Section -->
+            <section class="text-editor">
+                <div id="textInput" class="text-input" contenteditable="true" placeholder="Paste or type your text here, then highlight sections to generate content..."></div>
+            </section>
+            
+            <!-- Action Buttons -->
+            <section class="action-bar">
+                <div class="action-controls">
+                    <button id="generateButton" class="primary-action" disabled>Generate Cards</button>
+                    <button id="generateQuestionsButton" class="primary-action" disabled>Generate Questions</button>
+                </div>
+                <div class="selection-info">
+                    <span id="selectionStatus">No text selected</span>
+                </div>
+            </section>
+            
+            <!-- Output Section with Tabs -->
+            <section class="output-section">
+                <!-- Tab Navigation -->
+                <nav class="tab-nav">
+                    <button class="tab-button active" data-tab="cards-tab">Cards <span id="cardCount">(0)</span></button>
+                    <button class="tab-button" data-tab="questions-tab">Interview Questions <span id="questionCount">(0)</span></button>
                     
-                    <div class="tabs">
-                        <button class="tab-button active" data-tab="cards-tab">Cards <span id="cardCount">(0)</span></button>
-                        <button class="tab-button" data-tab="questions-tab">Interview Questions <span id="questionCount">(0)</span></button>
-                    </div>
-                    
-                    <div class="tab-controls">
+                    <!-- Tab-specific Controls -->
+                    <div class="tab-actions">
                         <div id="cards-controls" class="tab-control-group active">
                             <button id="exportButton" disabled>Export to Mochi</button>
-                            <button id="clearCardsButton" disabled>Clear All Cards</button>
+                            <button id="clearCardsButton" disabled>Clear All</button>
                         </div>
                         <div id="questions-controls" class="tab-control-group">
-                            <button id="exportQuestionsButton" disabled>Export Questions</button>
-                            <button id="clearQuestionsButton" disabled>Clear All Questions</button>
+                            <button id="exportQuestionsButton" disabled>Export</button>
+                            <button id="clearQuestionsButton" disabled>Clear All</button>
                         </div>
                     </div>
-                </div>
+                </nav>
                 
-                <div class="main-panel">
-                    <div class="input-section">
-                        <div class="input-header">
-                            <span>Highlight text to generate content</span>
-                        </div>
-                        <div id="textInput" class="text-input" contenteditable="true" placeholder="Paste or type your text here, then highlight sections to generate content..."></div>
+                <!-- Tab Content -->
+                <div class="tab-container">
+                    <div id="cards-tab" class="tab-content active">
+                        <div id="cardsContainer" class="cards-container"></div>
                     </div>
                     
-                    <div class="content-area">
-                        <div id="cards-tab" class="tab-content active">
-                            <div id="cardsContainer" class="cards-container"></div>
-                        </div>
-                        
-                        <div id="questions-tab" class="tab-content">
-                            <div id="questionsContainer" class="questions-container"></div>
-                        </div>
+                    <div id="questions-tab" class="tab-content">
+                        <div id="questionsContainer" class="questions-container"></div>
                     </div>
                 </div>
-            </div>
-        </div>
+            </section>
+        </main>
     </div>
     
     <script type="module" src="scripts.js"></script>

@@ -49,27 +49,35 @@ document.addEventListener('DOMContentLoaded', () => {
     tabButtons.forEach(button => {
         button.addEventListener('click', () => {
             const tabId = button.getAttribute('data-tab');
-            
-            // Remove active class from all buttons and contents
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            tabContents.forEach(content => content.classList.remove('active'));
-            
-            // Remove active class from all control groups
-            cardsControlGroup.classList.remove('active');
-            questionsControlGroup.classList.remove('active');
-            
-            // Add active class to current button and content
-            button.classList.add('active');
-            document.getElementById(tabId).classList.add('active');
-            
-            // Toggle corresponding control group
-            if (tabId === 'cards-tab') {
-                cardsControlGroup.classList.add('active');
-            } else if (tabId === 'questions-tab') {
-                questionsControlGroup.classList.add('active');
-            }
+            switchToTab(tabId);
         });
     });
+    
+    function switchToTab(tabId) {
+        // Find the tab button
+        const tabButton = document.querySelector(`.tab-button[data-tab="${tabId}"]`);
+        if (!tabButton) return;
+        
+        // Remove active class from all buttons and contents
+        tabButtons.forEach(btn => btn.classList.remove('active'));
+        tabContents.forEach(content => content.classList.remove('active'));
+        
+        // Remove active class from all control groups
+        document.querySelectorAll('.tab-control-group').forEach(group => {
+            group.classList.remove('active');
+        });
+        
+        // Add active class to current button and content
+        tabButton.classList.add('active');
+        document.getElementById(tabId).classList.add('active');
+        
+        // Toggle corresponding control group
+        if (tabId === 'cards-tab') {
+            document.getElementById('cards-controls').classList.add('active');
+        } else if (tabId === 'questions-tab') {
+            document.getElementById('questions-controls').classList.add('active');
+        }
+    }
     
     // Add plain text paste handlers
     textInput.addEventListener('paste', handlePaste);
@@ -120,14 +128,18 @@ document.addEventListener('DOMContentLoaded', () => {
             // Insert text at cursor position
             document.execCommand('insertText', false, text);
             
+            // Reset any text selection that might exist
+            window.getSelection().removeAllRanges();
+            
             // Check for selection after paste
-            handleTextSelection();
+            setTimeout(handleTextSelection, 0);
         }
     }
     
     function handleTextSelection() {
         const selection = window.getSelection();
         const selectedText = selection.toString().trim();
+        const selectionStatus = document.getElementById('selectionStatus');
         
         // Store selected text in state
         state.selectedText = selectedText;
@@ -136,6 +148,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasSelection = selectedText.length > 0;
         generateButton.disabled = !hasSelection;
         generateQuestionsButton.disabled = !hasSelection;
+        
+        // Update selection status text
+        if (hasSelection) {
+            const wordCount = selectedText.split(/\s+/).filter(Boolean).length;
+            const charCount = selectedText.length;
+            selectionStatus.textContent = `Selected: ${wordCount} words, ${charCount} characters`;
+        } else {
+            selectionStatus.textContent = 'No text selected';
+        }
     }
     
     async function generateCardsFromSelection() {
@@ -220,14 +241,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Chat functions removed
     
-    function switchToTab(tabId) {
-        // Find the tab button
-        const tabButton = document.querySelector(`.tab-button[data-tab="${tabId}"]`);
-        if (tabButton) {
-            // Trigger a click on it
-            tabButton.click();
-        }
-    }
     
     function highlightSelection() {
         // Get the current selection
