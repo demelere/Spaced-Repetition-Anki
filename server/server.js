@@ -19,7 +19,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../src')));
 
-// API endpoint for Claude
+// API endpoint for Claude to generate cards
 app.post('/api/generate-cards', async (req, res) => {
   try {
     const { text, defaultDeck } = req.body;
@@ -135,6 +135,105 @@ app.post('/api/generate-cards', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// API endpoint for generating interview questions
+app.post('/api/generate-questions', async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+    
+    // Get API key from environment
+    const apiKey = process.env.CLAUDE_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'API key not configured' });
+    }
+    
+    // Claude system prompt for generating podcast interview questions
+    const systemPrompt = `You are an expert research assistant for the host of Dwarkesh Podcast, helping prepare insightful interview questions based on text excerpts.
+
+    Guidelines for creating excellent interview questions:
+    1. Focus on thought-provoking, open-ended questions that can't be answered with a simple yes/no
+    2. Address key concepts, relationships, and implications from the text
+    3. Create questions that explore the "why" and "how" behind ideas, not just "what"
+    4. Identify potential disagreements or controversial aspects that would make for interesting discussion
+    5. Formulate questions that connect ideas from the text to broader contexts or implications
+    6. Ensure questions are specific enough to be meaningful but open enough to allow for expansive answers
+    7. Include follow-up questions where appropriate to go deeper on complex topics
+    8. Prioritize questions that will help the audience understand complex or novel ideas
+    
+    IMPORTANT - You must output your response as a valid JSON array of question objects. Each question object must have the following structure:
+    
+    {
+      "question": "The main interview question goes here",
+      "notes": "Optional notes for the interviewer about follow-ups or context",
+      "topic": "A short topic label (1-3 words) to categorize this question"
+    }
+    
+    Example of expected JSON format:
+    
+    [
+      {
+        "question": "You've written that X is a fundamental shift in Y. Can you explain why traditional approaches might be insufficient?",
+        "notes": "Follow-up on specific limitations of current methods; ask about real-world examples of failure modes",
+        "topic": "Methodology"
+      },
+      {
+        "question": "In your analysis of Z, you suggest there's a tension between A and B. How do you think this tension might be resolved?",
+        "notes": "This is controversial - some experts disagree with this framing entirely",
+        "topic": "Theory Debate"
+      }
+    ]
+    
+    Generate between 3-8 questions depending on the complexity and amount of content in the text.
+    Your response must be ONLY valid JSON - no introduction, no explanation, no markdown formatting.`;
+    
+    // Call Claude API
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-7-sonnet-20250219',
+        system: systemPrompt,
+        messages: [
+          {
+            role: 'user',
+            content: `Please create podcast interview questions based on the following text excerpt.
+            Use the guidelines from the system prompt.
+            
+            Remember to return ONLY a valid JSON array of question objects matching the required format.
+            
+            Text excerpt:
+            ${text}`
+          }
+        ],
+        max_tokens: 4000
+      })
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Claude API Error: ${errorData.error?.message || 'Unknown error'}`);
+    }
+    
+    const claudeResponse = await response.json();
+    
+    // Send the raw response back to client
+    res.json(claudeResponse);
+    
+  } catch (error) {
+    console.error('Server error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Chat endpoint removed
 
 // Serve the main app
 app.get('/', (req, res) => {

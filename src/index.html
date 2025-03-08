@@ -3,56 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SpacedRep Card Creator</title>
+    <title>Dwarkesh Research Assistant</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="app-container">
         <header>
-            <h1>SpacedRep Card Creator</h1>
+            <h1>Research & Podcast Prep Assistant</h1>
         </header>
         
         <div class="main-content">
-            <div class="input-section">
-                <div class="input-header">
-                    <span style="font-size: 14px; color: #666;">Highlight text to create flashcards</span>
-                </div>
-                <div class="text-input-controls">
-                    <div>
-                        <button id="pasteButton">Paste from Clipboard</button>
-                        <button id="clearButton">Clear</button>
+            <div class="app-layout">
+                <div class="sidebar">
+                    <div class="sidebar-controls">
+                        <button id="generateButton" disabled>Generate Cards</button>
+                        <button id="generateQuestionsButton" disabled>Generate Questions</button>
+                    </div>
+                    
+                    <div class="tabs">
+                        <button class="tab-button active" data-tab="cards-tab">Cards <span id="cardCount">(0)</span></button>
+                        <button class="tab-button" data-tab="questions-tab">Interview Questions <span id="questionCount">(0)</span></button>
+                    </div>
+                    
+                    <div class="tab-controls">
+                        <div id="cards-controls" class="tab-control-group active">
+                            <button id="exportButton" disabled>Export to Mochi</button>
+                            <button id="clearCardsButton" disabled>Clear All Cards</button>
+                        </div>
+                        <div id="questions-controls" class="tab-control-group">
+                            <button id="exportQuestionsButton" disabled>Export Questions</button>
+                            <button id="clearQuestionsButton" disabled>Clear All Questions</button>
+                        </div>
                     </div>
                 </div>
-                <div id="textInput" class="text-input" contenteditable="true" placeholder="Paste or type your text here, then highlight sections to generate flashcards..."></div>
-            </div>
-            
-            <div class="controls-section">
-                <div class="controls-left">
-                    <button id="generateButton" disabled>Generate Cards from Selection</button>
+                
+                <div class="main-panel">
+                    <div class="input-section">
+                        <div class="input-header">
+                            <span>Highlight text to generate content</span>
+                        </div>
+                        <div id="textInput" class="text-input" contenteditable="true" placeholder="Paste or type your text here, then highlight sections to generate content..."></div>
+                    </div>
+                    
+                    <div class="content-area">
+                        <div id="cards-tab" class="tab-content active">
+                            <div id="cardsContainer" class="cards-container"></div>
+                        </div>
+                        
+                        <div id="questions-tab" class="tab-content">
+                            <div id="questionsContainer" class="questions-container"></div>
+                        </div>
+                    </div>
                 </div>
-                <div class="deck-selection">
-                    <label for="defaultDeck">Default Deck:</label>
-                    <select id="defaultDeck">
-                        <option value="CS/Hardware">CS/Hardware</option>
-                        <option value="Math/Physics">Math/Physics</option>
-                        <option value="AI/Alignment">AI/Alignment</option>
-                        <option value="History/Military/Current">History/Military/Current</option>
-                        <option value="Quotes/Random">Quotes/Random</option>
-                        <option value="Bio">Bio</option>
-                        <option value="Econ/Finance">Econ/Finance</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="cards-section">
-                <div class="section-header">
-                    <span>Cards <span id="cardCount">(0)</span></span>
-                </div>
-                <div class="cards-controls">
-                    <button id="exportButton" disabled>Export to Mochi</button>
-                    <button id="clearCardsButton" disabled>Clear All Cards</button>
-                </div>
-                <div id="cardsContainer" class="cards-container"></div>
             </div>
         </div>
     </div>

@@ -1,21 +1,31 @@
 // Import Claude API functions
-import { generateCardsWithClaude } from './claude-api.js';
+import { generateCardsWithClaude, generateQuestionsWithClaude } from './claude-api.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const textInput = document.getElementById('textInput');
-    const pasteButton = document.getElementById('pasteButton');
-    const clearButton = document.getElementById('clearButton');
     const generateButton = document.getElementById('generateButton');
-    const defaultDeckSelect = document.getElementById('defaultDeck');
+    const generateQuestionsButton = document.getElementById('generateQuestionsButton');
     const cardsContainer = document.getElementById('cardsContainer');
+    const questionsContainer = document.getElementById('questionsContainer');
     const exportButton = document.getElementById('exportButton');
+    const exportQuestionsButton = document.getElementById('exportQuestionsButton');
     const clearCardsButton = document.getElementById('clearCardsButton');
+    const clearQuestionsButton = document.getElementById('clearQuestionsButton');
     const cardCountElement = document.getElementById('cardCount');
+    const questionCountElement = document.getElementById('questionCount');
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabContents = document.querySelectorAll('.tab-content');
+    const cardsControlGroup = document.getElementById('cards-controls');
+    const questionsControlGroup = document.getElementById('questions-controls');
     
     // App State
     const state = {
         cards: [],
+        questions: [],
+        selectedText: '',
+        // Default deck used for all cards
+        defaultDeck: "AI/Alignment",
         decks: {
             "CS/Hardware": "[[rhGqR9SK]]",
             "Math/Physics": "[[Dm5vczZg]]",
@@ -28,18 +38,54 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     // Event Listeners
-    pasteButton.addEventListener('click', pasteFromClipboard);
-    clearButton.addEventListener('click', clearTextInput);
     generateButton.addEventListener('click', generateCardsFromSelection);
+    generateQuestionsButton.addEventListener('click', generateQuestionsFromSelection);
     exportButton.addEventListener('click', exportToMochi);
+    exportQuestionsButton.addEventListener('click', exportQuestions);
     clearCardsButton.addEventListener('click', clearAllCards);
+    clearQuestionsButton.addEventListener('click', clearAllQuestions);
+    
+    // Tab navigation
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            const tabId = button.getAttribute('data-tab');
+            
+            // Remove active class from all buttons and contents
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            tabContents.forEach(content => content.classList.remove('active'));
+            
+            // Remove active class from all control groups
+            cardsControlGroup.classList.remove('active');
+            questionsControlGroup.classList.remove('active');
+            
+            // Add active class to current button and content
+            button.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            
+            // Toggle corresponding control group
+            if (tabId === 'cards-tab') {
+                cardsControlGroup.classList.add('active');
+            } else if (tabId === 'questions-tab') {
+                questionsControlGroup.classList.add('active');
+            }
+        });
+    });
+    
+    // Add plain text paste handlers
+    textInput.addEventListener('paste', handlePaste);
     
     // Monitor text selection
     textInput.addEventListener('mouseup', handleTextSelection);
     textInput.addEventListener('keyup', handleTextSelection);
+    
+    // Periodic check for selections (helps with some edge cases)
+    setInterval(handleTextSelection, 500);
 
     // Enable the button if there's already text in the selection
     handleTextSelection();
+    
+    // Initialize UI
+    updateButtonStates();
     
     // Prevent scrolling the page when mouse wheel is used over the text input
     textInput.addEventListener('wheel', function(e) {
@@ -63,122 +109,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: false });
     
     // Functions
-    function pasteFromClipboard() {
-        // Access clipboard and paste with formatting
-        navigator.clipboard.readText()
-            .then(text => {
-                // For direct button click paste, we'll try to preserve markdown-like formatting
-                
-                // Clear the input first
-                textInput.innerHTML = '';
-                
-                // Convert plain text with markdown-like syntax to HTML
-                let formattedHtml = convertMarkdownToHtml(text);
-                
-                // Insert as HTML to preserve basic formatting
-                textInput.innerHTML = formattedHtml;
-                
-                // Check for selection
-                handleTextSelection();
-            })
-            .catch(err => {
-                console.error('Failed to read clipboard contents: ', err);
-                alert('Cannot access clipboard. Please paste manually or use Ctrl+V/Cmd+V.');
-            });
-    }
-    
-    // Simple function to convert markdown-like syntax to basic HTML
-    function convertMarkdownToHtml(text) {
-        // This is a very basic implementation
-        // Headings (# Heading)
-        text = text.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-        text = text.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-        text = text.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+    function handlePaste(e) {
+        // Prevent the default paste behavior
+        e.preventDefault();
         
-        // Lists (- item)
-        text = text.replace(/^- (.+)$/gm, '<ul><li>$1</li></ul>');
-        
-        // Bold (**bold**)
-        text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-        
-        // Italic (*italic*)
-        text = text.replace(/\*(.+?)\*/g, '<em>$1</em>');
-        
-        // Paragraphs (double newlines)
-        text = text.replace(/\n\n/g, '</p><p>');
-        
-        // Wrap in paragraphs if not already
-        if (!text.startsWith('<h') && !text.startsWith('<ul')) {
-            text = '<p>' + text + '</p>';
-        }
-        
-        return text;
-    }
-    
-    // Now allow regular paste with formatting
-    textInput.addEventListener('paste', function(e) {
-        // Let the browser handle the paste with formatting
-        // But we'll clean it up after
-        
-        // Need to wait for the paste to complete
-        setTimeout(() => {
-            // Clean up problematic elements
-            const images = textInput.querySelectorAll('img, video, iframe, object, embed');
-            images.forEach(img => img.remove());
+        // Get plain text from clipboard
+        if (e.clipboardData && e.clipboardData.getData) {
+            const text = e.clipboardData.getData('text/plain');
             
-            // Clean up styles that might be problematic
-            const allElements = textInput.querySelectorAll('*');
-            allElements.forEach(el => {
-                // Keep element but remove problematic attributes
-                el.removeAttribute('id');
-                el.removeAttribute('class');
-                el.style.fontFamily = '';
-                el.style.fontSize = '';
-                el.style.color = '';
-                el.style.backgroundColor = '';
-            });
+            // Insert text at cursor position
+            document.execCommand('insertText', false, text);
             
+            // Check for selection after paste
             handleTextSelection();
-        }, 0);
-    });
-    
-    function clearTextInput() {
-        textInput.innerHTML = '';
-        generateButton.disabled = true;
+        }
     }
     
     function handleTextSelection() {
         const selection = window.getSelection();
         const selectedText = selection.toString().trim();
         
-        // Log for debugging
-        console.log('Text selected:', selectedText.length > 0 ? 'Yes' : 'No');
+        // Store selected text in state
+        state.selectedText = selectedText;
         
-        // Enable/disable button based on selection
-        generateButton.disabled = selectedText.length === 0;
+        // Enable/disable buttons based on selection
+        const hasSelection = selectedText.length > 0;
+        generateButton.disabled = !hasSelection;
+        generateQuestionsButton.disabled = !hasSelection;
     }
     
     async function generateCardsFromSelection() {
-        const selection = window.getSelection();
-        const selectedText = selection.toString().trim();
+        const selectedText = state.selectedText;
         
         if (!selectedText) {
             alert('Please select some text first.');
             return;
         }
         
-        const defaultDeck = defaultDeckSelect.value;
-        
         try {
             // Update UI to show processing state
             generateButton.disabled = true;
             generateButton.textContent = 'Generating...';
             
-            // Store current selection for highlighting after API call
-            const savedRange = selection.getRangeAt(0).cloneRange();
-            
-            // Get cards from Claude API
-            const cards = await callClaudeAPI(selectedText, defaultDeck);
+            // Get cards from Claude API using the default deck from state
+            const cards = await generateCardsWithClaude(selectedText, state.defaultDeck);
             
             // Add generated cards to state
             state.cards = [...state.cards, ...cards];
@@ -189,15 +163,69 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update buttons state
             updateButtonStates();
             
-            // Highlight the selection (after API call completes)
+            // Highlight the selection
             highlightSelection();
+            
+            // Switch to cards tab
+            switchToTab('cards-tab');
             
         } catch (error) {
             console.error('Error generating cards:', error);
             alert('Error generating cards: ' + (error.message || 'Please try again.'));
         } finally {
             generateButton.disabled = false;
-            generateButton.textContent = 'Generate Cards from Selection';
+            generateButton.textContent = 'Generate Cards';
+        }
+    }
+    
+    async function generateQuestionsFromSelection() {
+        const selectedText = state.selectedText;
+        
+        if (!selectedText) {
+            alert('Please select some text first.');
+            return;
+        }
+        
+        try {
+            // Update UI to show processing state
+            generateQuestionsButton.disabled = true;
+            generateQuestionsButton.textContent = 'Generating...';
+            
+            // Get questions from Claude API
+            const questions = await generateQuestionsWithClaude(selectedText);
+            
+            // Add generated questions to state
+            state.questions = [...state.questions, ...questions];
+            
+            // Render all questions
+            renderQuestions();
+            
+            // Update buttons state
+            updateButtonStates();
+            
+            // Highlight the selection
+            highlightSelection();
+            
+            // Switch to questions tab
+            switchToTab('questions-tab');
+            
+        } catch (error) {
+            console.error('Error generating questions:', error);
+            alert('Error generating questions: ' + (error.message || 'Please try again.'));
+        } finally {
+            generateQuestionsButton.disabled = false;
+            generateQuestionsButton.textContent = 'Generate Questions';
+        }
+    }
+    
+    // Chat functions removed
+    
+    function switchToTab(tabId) {
+        // Find the tab button
+        const tabButton = document.querySelector(`.tab-button[data-tab="${tabId}"]`);
+        if (tabButton) {
+            // Trigger a click on it
+            tabButton.click();
         }
     }
     
@@ -205,14 +233,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Get the current selection
         const selection = window.getSelection();
         if (!selection.rangeCount) return;
-        
-        // Create a temporary marker for the selection
-        const marker = document.createElement('mark');
-        marker.className = 'highlight';
-        marker.style.backgroundColor = '#ffe066';
-        marker.style.padding = '0';
-        marker.style.margin = '0';
-        marker.style.borderRadius = '2px';
         
         try {
             // Get the range of the current selection
@@ -222,6 +242,27 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!textInput.contains(range.commonAncestorContainer)) {
                 return;
             }
+            
+            // First clear any existing highlights
+            const existingHighlights = textInput.querySelectorAll('.highlight');
+            existingHighlights.forEach(highlight => {
+                // Get the parent node
+                const parent = highlight.parentNode;
+                // Replace the highlight with its contents
+                while (highlight.firstChild) {
+                    parent.insertBefore(highlight.firstChild, highlight);
+                }
+                // Remove the empty highlight element
+                parent.removeChild(highlight);
+            });
+            
+            // Create a temporary marker for the selection
+            const marker = document.createElement('mark');
+            marker.className = 'highlight';
+            marker.style.backgroundColor = 'var(--highlight-color)';
+            marker.style.padding = '0';
+            marker.style.margin = '0';
+            marker.style.borderRadius = '2px';
             
             // Clone the range to avoid modifying the selection directly
             const clonedRange = range.cloneRange();
@@ -252,6 +293,18 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Update card count
         cardCountElement.textContent = `(${state.cards.length})`;
+    }
+    
+    function renderQuestions() {
+        questionsContainer.innerHTML = '';
+        
+        state.questions.forEach((question, index) => {
+            const questionElement = createQuestionElement(question, index);
+            questionsContainer.appendChild(questionElement);
+        });
+        
+        // Update question count
+        questionCountElement.textContent = `(${state.questions.length})`;
     }
     
     function createCardElement(card, index) {
@@ -318,9 +371,68 @@ document.addEventListener('DOMContentLoaded', () => {
         return cardDiv;
     }
     
+    function createQuestionElement(question, index) {
+        const questionDiv = document.createElement('div');
+        questionDiv.className = 'question-item';
+        
+        // Sanitize the question data to ensure it's rendered properly
+        const sanitizeHtml = (text) => {
+            const tempDiv = document.createElement('div');
+            tempDiv.textContent = text;
+            return tempDiv.innerHTML;
+        };
+        
+        // Ensure content is properly formatted
+        const questionText = typeof question.question === 'string' ? 
+            sanitizeHtml(question.question) : sanitizeHtml(JSON.stringify(question.question));
+        
+        const notes = question.notes && typeof question.notes === 'string' ? 
+            sanitizeHtml(question.notes) : '';
+            
+        const topic = question.topic && typeof question.topic === 'string' ? 
+            sanitizeHtml(question.topic) : 'General';
+        
+        questionDiv.innerHTML = `
+            <div class="question-header">
+                <span class="question-topic">${topic}</span>
+                <span>Question #${index + 1}</span>
+            </div>
+            <div class="question-text" contenteditable="true">${questionText}</div>
+            ${notes ? `<div class="question-notes" contenteditable="true">${notes}</div>` : ''}
+            <div class="question-actions">
+                <button class="delete-question-button" data-index="${index}">Delete</button>
+            </div>
+        `;
+        
+        // Add event listeners
+        const deleteButton = questionDiv.querySelector('.delete-question-button');
+        deleteButton.addEventListener('click', () => deleteQuestion(index));
+        
+        // Make question content editable
+        const questionTextElem = questionDiv.querySelector('.question-text');
+        questionTextElem.addEventListener('blur', () => {
+            state.questions[index].question = questionTextElem.textContent;
+        });
+        
+        const notesElem = questionDiv.querySelector('.question-notes');
+        if (notesElem) {
+            notesElem.addEventListener('blur', () => {
+                state.questions[index].notes = notesElem.textContent;
+            });
+        }
+        
+        return questionDiv;
+    }
+    
     function deleteCard(index) {
         state.cards.splice(index, 1);
         renderCards();
+        updateButtonStates();
+    }
+    
+    function deleteQuestion(index) {
+        state.questions.splice(index, 1);
+        renderQuestions();
         updateButtonStates();
     }
     
@@ -340,9 +452,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function updateButtonStates() {
+        // Cards buttons
         const hasCards = state.cards.length > 0;
         exportButton.disabled = !hasCards;
         clearCardsButton.disabled = !hasCards;
+        
+        // Questions buttons
+        const hasQuestions = state.questions.length > 0;
+        exportQuestionsButton.disabled = !hasQuestions;
+        clearQuestionsButton.disabled = !hasQuestions;
     }
     
     function clearAllCards() {
@@ -353,9 +471,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    function clearAllQuestions() {
+        if (confirm('Are you sure you want to clear all questions?')) {
+            state.questions = [];
+            renderQuestions();
+            updateButtonStates();
+        }
+    }
+    
     function exportToMochi() {
         const mochiData = formatCardsForMochi();
-        downloadMochiExport(mochiData);
+        downloadExport(mochiData, `spaced-rep-cards-${new Date().toISOString().slice(0, 10)}.json`);
+    }
+    
+    function exportQuestions() {
+        const questionsData = JSON.stringify(state.questions, null, 2);
+        downloadExport(questionsData, `interview-questions-${new Date().toISOString().slice(0, 10)}.json`);
     }
     
     function formatCardsForMochi() {
@@ -392,93 +523,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return JSON.stringify(data, null, 2);
     }
     
-    function downloadMochiExport(data) {
+    function downloadExport(data, filename) {
         const blob = new Blob([data], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `spaced-rep-cards-${new Date().toISOString().slice(0, 10)}.json`;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
         setTimeout(() => {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }, 0);
-    }
-    
-    // Call the real API or use mock implementation based on MOCK_API setting
-    async function callClaudeAPI(text, defaultDeck) {
-        // For development (mock implementation)
-        console.log('Calling Claude API (mock) with:', { text, defaultDeck });
-        
-        // Set MOCK_API to false to use the real Claude API
-        const MOCK_API = false;
-        
-        if (MOCK_API) {
-            // Return mock data after a delay to simulate API call
-            return new Promise(resolve => {
-                setTimeout(() => {
-                    // Generate different mock cards based on the text content to simulate intelligence
-                    let mockCards = [];
-                    
-                    // Very basic content analysis for more realistic mock responses
-                    const lowerText = text.toLowerCase();
-                    
-                    if (lowerText.includes('algorithm') || lowerText.includes('code') || lowerText.includes('program')) {
-                        mockCards.push({
-                            front: "What is the key algorithm concept described in the text?",
-                            back: "The text discusses " + text.substring(0, 50) + "...",
-                            deck: "CS/Hardware"
-                        });
-                    } else if (lowerText.includes('physics') || lowerText.includes('equation') || lowerText.includes('math')) {
-                        mockCards.push({
-                            front: "What is the mathematical relationship described in the text?",
-                            back: "The text explains that " + text.substring(0, 50) + "...",
-                            deck: "Math/Physics"
-                        });
-                    } else if (lowerText.includes('ai') || lowerText.includes('machine learning') || lowerText.includes('neural')) {
-                        mockCards.push({
-                            front: "What AI concept is being explained in the passage?",
-                            back: "The passage describes " + text.substring(0, 50) + "...",
-                            deck: "AI/Alignment"
-                        });
-                    } else {
-                        // Default cards if no specific topic is detected
-                        mockCards.push({
-                            front: "What is the main idea of the selected text?",
-                            back: "The text discusses " + text.substring(0, 50) + "...",
-                            deck: defaultDeck
-                        });
-                    }
-                    
-                    // Always add a second generic card
-                    mockCards.push({
-                        front: "Why is the concept in this text significant?",
-                        back: "Its significance lies in " + text.substring(0, 30) + "...",
-                        deck: defaultDeck
-                    });
-                    
-                    resolve(mockCards);
-                }, 1500);
-            });
-        } else {
-            try {
-                // Call the actual Claude API
-                console.log('Calling real Claude API...');
-                return await generateCardsWithClaude(text, defaultDeck);
-            } catch (error) {
-                console.error('Error using Claude API:', error);
-                alert('Error calling Claude API. Using fallback data instead.');
-                
-                // Fallback to basic data if API fails
-                return [
-                    {
-                        front: "What is the main concept in the text?",
-                        back: "The text explains " + text.substring(0, 40) + "...",
-                        deck: defaultDeck
-                    }
-                ];
-            }
-        }
     }
 });

@@ -1,7 +1,7 @@
 // Configuration for Claude API
 // The API key will be loaded from the server environment
 const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
-const CLAUDE_MODEL = "claude-3-7-sonnet-20240229"; // Update this with the latest model version
+const CLAUDE_MODEL = "claude-3-7-sonnet-20250219"; // Updated to the latest model version
 
 // The prompt instructions to guide Claude in generating high-quality flashcards
 // Based on principles from Michael Nielsen and Andy Matuschak
@@ -72,6 +72,42 @@ async function generateCardsWithClaude(text, defaultDeck) {
         throw error;
     }
 }
+
+/**
+ * Calls Claude API to generate interview questions from text
+ * @param {string} text - The text selection to create questions from
+ * @returns {Promise<Array>} - Array of question objects with question, notes, and topic properties
+ */
+async function generateQuestionsWithClaude(text) {
+    try {
+        // Call the server endpoint that handles the API key safely
+        const response = await fetch('/api/generate-questions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                text
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`API Error: ${errorData.error || 'Unknown error'}`);
+        }
+
+        const data = await response.json();
+        console.log('Raw questions response data:', data);
+        
+        // Parse Claude's response to extract questions
+        return parseQuestionsResponse(data);
+    } catch (error) {
+        console.error('Error calling questions API:', error);
+        throw error;
+    }
+}
+
+// Chat function removed
 
 /**
  * Parses Claude's response to extract structured card data
@@ -178,4 +214,105 @@ function parseClaudeResponse(responseData, defaultDeck) {
     }];
 }
 
-export { generateCardsWithClaude };
+/**
+ * Parses Claude's response to extract structured question data
+ * Similar to card parsing but for the questions format
+ * 
+ * @param {Object} responseData - The raw response from Claude
+ * @returns {Array} - Array of question objects
+ */
+function parseQuestionsResponse(responseData) {
+    let responseText = '';
+    
+    // Extract text content from response
+    if (responseData.content && Array.isArray(responseData.content)) {
+        for (const item of responseData.content) {
+            if (item.type === 'text') {
+                responseText += item.text;
+            }
+        }
+    } else if (responseData.content && responseData.content[0] && responseData.content[0].text) {
+        responseText = responseData.content[0].text;
+    } else {
+        console.warn('Unexpected response format from Claude API');
+        responseText = JSON.stringify(responseData);
+    }
+    
+    console.log('Raw text response from Claude (questions):', responseText);
+    
+    // Try to parse as JSON
+    try {
+        // First, extract JSON if it's embedded in other text
+        // Look for anything that might be JSON array
+        const jsonMatch = responseText.match(/(\[\s*\{.*\}\s*\])/s);
+        const jsonText = jsonMatch ? jsonMatch[1] : responseText;
+        
+        // Parse the JSON
+        const parsedQuestions = JSON.parse(jsonText);
+        console.log('Successfully parsed JSON questions:', parsedQuestions);
+        
+        // Validate the parsed data is an array with the expected structure
+        if (Array.isArray(parsedQuestions) && parsedQuestions.length > 0) {
+            // Validate each question has required fields
+            const validQuestions = parsedQuestions.filter(q => {
+                return q.question && (q.topic || "General");
+            });
+            
+            // Normalize the questions
+            const normalizedQuestions = validQuestions.map(q => ({
+                question: q.question,
+                notes: q.notes || "",
+                topic: q.topic || "General"
+            }));
+            
+            if (normalizedQuestions.length > 0) {
+                console.log('Returning valid JSON questions:', normalizedQuestions);
+                return normalizedQuestions;
+            }
+        }
+        console.warn('Parsed JSON did not contain valid questions');
+    } catch (error) {
+        console.warn('Failed to parse questions response as JSON:', error);
+        
+        // Try searching for JSON inside the text (sometimes Claude wraps JSON in backticks or other text)
+        try {
+            const jsonRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
+            const match = responseText.match(jsonRegex);
+            if (match && match[1]) {
+                const extractedJson = match[1];
+                const parsedQuestions = JSON.parse(extractedJson);
+                
+                if (Array.isArray(parsedQuestions) && parsedQuestions.length > 0) {
+                    const validQuestions = parsedQuestions.filter(q => {
+                        return q.question && (q.topic || "General");
+                    }).map(q => ({
+                        question: q.question,
+                        notes: q.notes || "",
+                        topic: q.topic || "General"
+                    }));
+                    
+                    if (validQuestions.length > 0) {
+                        console.log('Returning valid JSON questions (extracted from code block):', validQuestions);
+                        return validQuestions;
+                    }
+                }
+            }
+        } catch (innerError) {
+            console.warn('Failed to extract JSON from code blocks:', innerError);
+        }
+    }
+    
+    // Fallback: If JSON parsing fails, create a basic fallback question
+    console.warn('Could not parse any questions from Claude response, using fallback');
+    
+    return [{
+        question: "What are the key points from this text that would be interesting to discuss?",
+        notes: "This is a fallback question generated when parsing failed.",
+        topic: "General"
+    }];
+}
+
+export { 
+    generateCardsWithClaude,
+    generateQuestionsWithClaude
+};
