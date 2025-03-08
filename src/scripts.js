@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const tabContents = document.querySelectorAll('.tab-content');
     const cardsControlGroup = document.getElementById('cards-controls');
     const questionsControlGroup = document.getElementById('questions-controls');
+    const splitterHandle = document.querySelector('.splitter-handle');
     
     // App State
     const state = {
@@ -71,11 +72,15 @@ document.addEventListener('DOMContentLoaded', () => {
         tabButton.classList.add('active');
         document.getElementById(tabId).classList.add('active');
         
-        // Toggle corresponding control group
+        // Toggle corresponding control group and update generate button visibility
         if (tabId === 'cards-tab') {
             document.getElementById('cards-controls').classList.add('active');
+            generateButton.style.display = 'block';
+            generateQuestionsButton.style.display = 'none';
         } else if (tabId === 'questions-tab') {
             document.getElementById('questions-controls').classList.add('active');
+            generateButton.style.display = 'none';
+            generateQuestionsButton.style.display = 'block';
         }
     }
     
@@ -94,6 +99,48 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize UI
     updateButtonStates();
+    
+    // Set up the resizable splitter
+    let isResizing = false;
+    let startY, startHeight;
+    
+    splitterHandle.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        startY = e.clientY;
+        const editorPanel = document.querySelector('.editor-panel');
+        startHeight = editorPanel.offsetHeight;
+        
+        document.documentElement.style.cursor = 'row-resize';
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', stopResize);
+        e.preventDefault();
+    });
+    
+    function handleMouseMove(e) {
+        if (!isResizing) return;
+        
+        const editorPanel = document.querySelector('.editor-panel');
+        const container = document.querySelector('.splitter-container');
+        const deltaY = e.clientY - startY;
+        const newHeight = startHeight + deltaY;
+        
+        // Don't allow editor to be smaller than 100px or larger than 80% of container
+        const minHeight = 100;
+        const maxHeight = container.offsetHeight * 0.8;
+        
+        if (newHeight > minHeight && newHeight < maxHeight) {
+            editorPanel.style.height = `${newHeight}px`;
+        }
+    }
+    
+    function stopResize() {
+        if (isResizing) {
+            isResizing = false;
+            document.documentElement.style.cursor = '';
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', stopResize);
+        }
+    }
     
     // Prevent scrolling the page when mouse wheel is used over the text input
     textInput.addEventListener('wheel', function(e) {
@@ -153,7 +200,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (hasSelection) {
             const wordCount = selectedText.split(/\s+/).filter(Boolean).length;
             const charCount = selectedText.length;
-            selectionStatus.textContent = `Selected: ${wordCount} words, ${charCount} characters`;
+            selectionStatus.textContent = `${wordCount} words, ${charCount} chars selected`;
         } else {
             selectionStatus.textContent = 'No text selected';
         }
@@ -398,9 +445,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Ensure content is properly formatted
         const questionText = typeof question.question === 'string' ? 
             sanitizeHtml(question.question) : sanitizeHtml(JSON.stringify(question.question));
-        
-        const notes = question.notes && typeof question.notes === 'string' ? 
-            sanitizeHtml(question.notes) : '';
             
         const topic = question.topic && typeof question.topic === 'string' ? 
             sanitizeHtml(question.topic) : 'General';
@@ -408,10 +452,11 @@ document.addEventListener('DOMContentLoaded', () => {
         questionDiv.innerHTML = `
             <div class="question-header">
                 <span class="question-topic">${topic}</span>
-                <span>Question #${index + 1}</span>
+                <span>Q${index + 1}</span>
             </div>
-            <div class="question-text" contenteditable="true">${questionText}</div>
-            ${notes ? `<div class="question-notes" contenteditable="true">${notes}</div>` : ''}
+            <div class="question-body">
+                <div class="question-text" contenteditable="true">${questionText}</div>
+            </div>
             <div class="question-actions">
                 <button class="delete-question-button" data-index="${index}">Delete</button>
             </div>
@@ -426,13 +471,6 @@ document.addEventListener('DOMContentLoaded', () => {
         questionTextElem.addEventListener('blur', () => {
             state.questions[index].question = questionTextElem.textContent;
         });
-        
-        const notesElem = questionDiv.querySelector('.question-notes');
-        if (notesElem) {
-            notesElem.addEventListener('blur', () => {
-                state.questions[index].notes = notesElem.textContent;
-            });
-        }
         
         return questionDiv;
     }
@@ -492,14 +530,73 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    function exportToMochi() {
-        const mochiData = formatCardsForMochi();
-        downloadExport(mochiData, `spaced-rep-cards-${new Date().toISOString().slice(0, 10)}.json`);
+    async function exportToMochi() {
+        try {
+            const mochiData = formatCardsForMochi();
+            const cards = JSON.parse(mochiData).cards;
+            
+            // First check if Mochi API integration is available
+            const envResponse = await fetch('/api/env-status');
+            const envStatus = await envResponse.json();
+            
+            if (!envStatus.hasMochiApiKey) {
+                alert('Mochi API key not configured. Falling back to download.');
+                downloadExport(mochiData, `spaced-rep-cards-${new Date().toISOString().slice(0, 10)}.json`);
+                return;
+            }
+            
+            // Show loading indicator
+            exportButton.disabled = true;
+            exportButton.textContent = 'Uploading...';
+            
+            // Use the server endpoint to handle Mochi uploads
+            const response = await fetch('/api/upload-to-mochi', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ cards })
+            });
+            
+            if (!response.ok) {
+                throw new Error('Failed to upload to Mochi');
+            }
+            
+            const result = await response.json();
+            alert(`${result.totalSuccess} of ${result.totalCards} cards uploaded to Mochi successfully!`);
+            
+        } catch (error) {
+            console.error('Error uploading to Mochi API:', error);
+            alert('Error uploading to Mochi. Falling back to download.');
+            const mochiData = formatCardsForMochi();
+            downloadExport(mochiData, `spaced-rep-cards-${new Date().toISOString().slice(0, 10)}.json`);
+        } finally {
+            // Reset button state
+            exportButton.disabled = false;
+            exportButton.textContent = 'Export to Mochi';
+        }
     }
     
     function exportQuestions() {
-        const questionsData = JSON.stringify(state.questions, null, 2);
-        downloadExport(questionsData, `interview-questions-${new Date().toISOString().slice(0, 10)}.json`);
+        // Format questions as bullet point markdown
+        let questionsMarkdown = '';
+        
+        state.questions.forEach(q => {
+            questionsMarkdown += `- ${q.question}\n\n`;
+        });
+        
+        // Download as markdown
+        const blob = new Blob([questionsMarkdown], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `interview-questions-${new Date().toISOString().slice(0, 10)}.md`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 0);
     }
     
     function formatCardsForMochi() {

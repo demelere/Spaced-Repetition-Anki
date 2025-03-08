@@ -11,6 +11,11 @@ const cors = require('cors');
 const path = require('path');
 const fetch = require('node-fetch');
 
+// Log available environment variables for debugging (without exposing values)
+console.log('Environment variables available:', Object.keys(process.env).filter(key => 
+  key.includes('API_KEY') || key.includes('TOKEN')
+).map(key => `${key}: ${key.includes('KEY') ? '****' : 'configured'}`));
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -18,6 +23,15 @@ const PORT = process.env.PORT || 3000;
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../src')));
+
+// Add middleware to expose environment variables to client
+// Only expose MOCHI_API_KEY but NOT the actual key value
+app.use((req, res, next) => {
+  res.locals.envVars = {
+    hasMochiApiKey: !!process.env.MOCHI_API_KEY
+  };
+  next();
+});
 
 // API endpoint for Claude to generate cards
 app.post('/api/generate-cards', async (req, res) => {
@@ -29,7 +43,7 @@ app.post('/api/generate-cards', async (req, res) => {
     }
     
     // Get API key from environment
-    const apiKey = process.env.CLAUDE_API_KEY;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'API key not configured' });
     }
@@ -146,7 +160,7 @@ app.post('/api/generate-questions', async (req, res) => {
     }
     
     // Get API key from environment
-    const apiKey = process.env.CLAUDE_API_KEY;
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
       return res.status(500).json({ error: 'API key not configured' });
     }
@@ -161,14 +175,13 @@ app.post('/api/generate-questions', async (req, res) => {
     4. Identify potential disagreements or controversial aspects that would make for interesting discussion
     5. Formulate questions that connect ideas from the text to broader contexts or implications
     6. Ensure questions are specific enough to be meaningful but open enough to allow for expansive answers
-    7. Include follow-up questions where appropriate to go deeper on complex topics
-    8. Prioritize questions that will help the audience understand complex or novel ideas
+    7. Prioritize questions that will help the audience understand complex or novel ideas
+    8. Make sure questions are clear, concise, and directly usable without additional context
     
     IMPORTANT - You must output your response as a valid JSON array of question objects. Each question object must have the following structure:
     
     {
-      "question": "The main interview question goes here",
-      "notes": "Optional notes for the interviewer about follow-ups or context",
+      "question": "The complete interview question goes here. Make it standalone without requiring additional context.",
       "topic": "A short topic label (1-3 words) to categorize this question"
     }
     
@@ -176,14 +189,12 @@ app.post('/api/generate-questions', async (req, res) => {
     
     [
       {
-        "question": "You've written that X is a fundamental shift in Y. Can you explain why traditional approaches might be insufficient?",
-        "notes": "Follow-up on specific limitations of current methods; ask about real-world examples of failure modes",
-        "topic": "Methodology"
+        "question": "You've written that quantum computing represents a fundamental shift in information processing. Can you explain why traditional computing approaches might be insufficient for the problems quantum computing aims to solve?",
+        "topic": "Quantum Computing"
       },
       {
-        "question": "In your analysis of Z, you suggest there's a tension between A and B. How do you think this tension might be resolved?",
-        "notes": "This is controversial - some experts disagree with this framing entirely",
-        "topic": "Theory Debate"
+        "question": "In your analysis of large language models, you suggest there's a tension between capabilities and alignment. How do you think this tension might be resolved as models continue to advance?",
+        "topic": "AI Safety"
       }
     ]
     
@@ -234,6 +245,70 @@ app.post('/api/generate-questions', async (req, res) => {
 });
 
 // Chat endpoint removed
+
+// API endpoint to check environment status
+app.get('/api/env-status', (req, res) => {
+  res.json({
+    hasMochiApiKey: !!process.env.MOCHI_API_KEY
+  });
+});
+
+// API endpoint for direct Mochi integration
+app.post('/api/upload-to-mochi', async (req, res) => {
+  try {
+    const { cards } = req.body;
+    
+    if (!cards || !Array.isArray(cards)) {
+      return res.status(400).json({ error: 'Cards array is required' });
+    }
+    
+    // Get Mochi API key from environment
+    const mochiApiKey = process.env.MOCHI_API_KEY;
+    if (!mochiApiKey) {
+      return res.status(500).json({ error: 'Mochi API key not configured' });
+    }
+    
+    // Upload each card to Mochi
+    const results = [];
+    
+    for (const card of cards) {
+      try {
+        const response = await fetch('https://app.mochi.cards/api/cards/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${mochiApiKey}`
+          },
+          body: JSON.stringify({
+            'content': card.content,
+            'deck-id': card['deck-id']
+          })
+        });
+        
+        if (response.ok) {
+          const responseData = await response.json();
+          results.push({ success: true, id: responseData.id });
+        } else {
+          const errorText = await response.text();
+          results.push({ success: false, error: errorText });
+        }
+      } catch (cardError) {
+        results.push({ success: false, error: cardError.message });
+      }
+    }
+    
+    res.json({
+      success: true,
+      results: results,
+      totalSuccess: results.filter(r => r.success).length,
+      totalCards: cards.length
+    });
+    
+  } catch (error) {
+    console.error('Server error during Mochi upload:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Serve the main app
 app.get('/', (req, res) => {

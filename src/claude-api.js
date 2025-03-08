@@ -1,6 +1,6 @@
 // Configuration for Claude API
 // The API key will be loaded from the server environment
-const CLAUDE_API_URL = "https://api.anthropic.com/v1/messages";
+const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
 const CLAUDE_MODEL = "claude-3-7-sonnet-20250219"; // Updated to the latest model version
 
 // The prompt instructions to guide Claude in generating high-quality flashcards
@@ -261,7 +261,6 @@ function parseQuestionsResponse(responseData) {
             // Normalize the questions
             const normalizedQuestions = validQuestions.map(q => ({
                 question: q.question,
-                notes: q.notes || "",
                 topic: q.topic || "General"
             }));
             
@@ -287,7 +286,6 @@ function parseQuestionsResponse(responseData) {
                         return q.question && (q.topic || "General");
                     }).map(q => ({
                         question: q.question,
-                        notes: q.notes || "",
                         topic: q.topic || "General"
                     }));
                     
@@ -307,7 +305,6 @@ function parseQuestionsResponse(responseData) {
     
     return [{
         question: "What are the key points from this text that would be interesting to discuss?",
-        notes: "This is a fallback question generated when parsing failed.",
         topic: "General"
     }];
 }
