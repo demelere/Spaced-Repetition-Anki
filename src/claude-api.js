@@ -41,9 +41,10 @@ Generate between 1-5 cards depending on the complexity and amount of content in 
  * Calls Claude API to generate flashcards from text
  * @param {string} text - The text selection to create cards from
  * @param {string} defaultDeck - The default deck category to use if Claude doesn't specify one
+ * @param {string} deckOptions - Comma-separated list of available deck options
  * @returns {Promise<Array>} - Array of card objects with front, back, and deck properties
  */
-async function generateCardsWithClaude(text, defaultDeck) {
+async function generateCardsWithClaude(text, defaultDeck, deckOptions = '') {
     try {
         // Call the server endpoint that handles the API key safely
         const response = await fetch('/api/generate-cards', {
@@ -53,7 +54,8 @@ async function generateCardsWithClaude(text, defaultDeck) {
             },
             body: JSON.stringify({
                 text,
-                defaultDeck
+                defaultDeck,
+                deckOptions
             })
         });
 

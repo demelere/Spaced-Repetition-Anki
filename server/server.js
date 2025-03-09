@@ -64,14 +64,8 @@ app.post('/api/generate-cards', async (req, res) => {
     9. Focus on "why" and "how" questions that develop deeper understanding
     10. Promote connections between concepts across domains when relevant
     
-    You will also analyze the content and suggest an appropriate deck category from these options:
-    - CS/Hardware
-    - Math/Physics
-    - AI/Alignment
-    - History/Military/Current
-    - Quotes/Random
-    - Bio
-    - Econ/Finance
+    You will also analyze the content and suggest an appropriate deck category.
+    The specific deck options will be dynamically determined and provided in the user message.
     
     IMPORTANT - You must output your response as a valid JSON array of card objects. Each card object must have the following structure:
     
@@ -115,7 +109,9 @@ app.post('/api/generate-cards', async (req, res) => {
             role: 'user',
             content: `Please create spaced repetition flashcards from the following text excerpt.
             Use the guidelines from the system prompt.
-            Default deck category (if content doesn't clearly match another category): ${defaultDeck}
+            
+            Available deck categories: ${req.body.deckOptions || Object.keys(req.body.deckMap || {}).join(', ') || defaultDeck}
+            Default deck category: ${defaultDeck}
             
             Remember to return ONLY a valid JSON array of flashcard objects matching the required format.
             
@@ -245,6 +241,74 @@ app.post('/api/generate-questions', async (req, res) => {
 });
 
 // Chat endpoint removed
+
+// API endpoint to fetch decks from Mochi
+app.get('/api/mochi-decks', async (req, res) => {
+  try {
+    // Get Mochi API key from environment
+    const mochiApiKey = process.env.MOCHI_API_KEY;
+    if (!mochiApiKey) {
+      return res.status(500).json({ error: 'Mochi API key not configured' });
+    }
+    
+    // Mochi uses HTTP Basic Auth with API key followed by colon
+    const base64ApiKey = Buffer.from(`${mochiApiKey}:`).toString('base64');
+    const authToken = `Basic ${base64ApiKey}`;
+    
+    // Fetch decks from Mochi API
+    const response = await fetch('https://app.mochi.cards/api/decks/', {
+      method: 'GET',
+      headers: {
+        'Authorization': authToken
+      }
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Mochi API Error: ${errorText}`);
+    }
+    
+    const decksData = await response.json();
+    
+    // Transform data for client use
+    const formattedDecks = {};
+    
+    // Filter out trashed and archived decks
+    const activeDeckCount = decksData.docs.length;
+    let activeDecksCount = 0;
+    
+    decksData.docs.forEach(deck => {
+      // Skip decks that are in trash or archived
+      if (deck['trashed?'] || deck['archived?']) {
+        return; // Skip this deck
+      }
+      
+      // Only include active decks
+      activeDecksCount++;
+      
+      // Remove [[ ]] if present in the ID
+      const cleanId = deck.id.replace(/\[\[|\]\]/g, '');
+      formattedDecks[deck.name] = cleanId;
+    });
+    
+    console.log(`Loaded ${activeDecksCount} active decks out of ${activeDeckCount} total decks from Mochi API`);
+    
+    res.json({
+      success: true,
+      decks: formattedDecks,
+      deckCount: activeDecksCount
+    });
+    
+  } catch (error) {
+    console.error('Error fetching Mochi decks:', error);
+    res.status(500).json({ 
+      error: error.message,
+      fallbackDecks: {
+        "General": "general"
+      }
+    });
+  }
+});
 
 // API endpoint to check environment status
 app.get('/api/env-status', (req, res) => {

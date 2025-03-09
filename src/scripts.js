@@ -19,25 +19,63 @@ document.addEventListener('DOMContentLoaded', () => {
     const cardsControlGroup = document.getElementById('cards-controls');
     const questionsControlGroup = document.getElementById('questions-controls');
     const splitterHandle = document.querySelector('.splitter-handle');
-    const defaultDeckDisplay = document.getElementById('defaultDeckDisplay');
     
     // App State
     const state = {
         cards: [],
         questions: [],
         selectedText: '',
-        // Default deck used for all cards
-        defaultDeck: "AI/Alignment",
-        decks: {
-            "CS/Hardware": "[[rhGqR9SK]]",
-            "Math/Physics": "[[Dm5vczZg]]",
-            "AI/Alignment": "[[SS9QEfiy]]",
-            "History/Military/Current": "[[3nJYp7Zh]]",
-            "Quotes/Random": "[[rWUzSu8t]]",
-            "Bio": "[[BspzxaUJ]]",
-            "Econ/Finance": "[[mvvJ27Q1]]"
-        }
+        currentDeck: null,
+        decks: {}
     };
+    
+    // Fetch decks from Mochi API
+    async function fetchDecks() {
+        try {
+            // First check if Mochi API integration is available
+            const envResponse = await fetch('/api/env-status');
+            const envStatus = await envResponse.json();
+            
+            if (!envStatus.hasMochiApiKey) {
+                console.warn('Mochi API key not configured. Using fallback decks.');
+                state.decks = { "General": "general" };
+                state.currentDeck = "General";
+                return;
+            }
+            
+            const response = await fetch('/api/mochi-decks');
+            if (!response.ok) {
+                throw new Error('Failed to fetch decks from Mochi');
+            }
+            
+            const data = await response.json();
+            
+            if (data.success && data.decks) {
+                // Store the decks in the state
+                state.decks = data.decks;
+                
+                // Set currentDeck to first deck in the list
+                state.currentDeck = Object.keys(data.decks)[0] || "General";
+                console.log(`Loaded ${Object.keys(data.decks).length} active decks from Mochi`);
+            } else if (data.fallbackDecks) {
+                state.decks = data.fallbackDecks;
+                state.currentDeck = Object.keys(data.fallbackDecks)[0] || "General";
+                console.warn('Using fallback decks:', state.decks);
+            }
+            
+            // Create deck selector dropdown
+            createDeckSelector();
+            
+        } catch (error) {
+            console.error('Error fetching decks:', error);
+            // Fallback to a simple deck structure
+            state.decks = { "General": "general" };
+            state.currentDeck = "General";
+            
+            // Create deck selector with fallback
+            createDeckSelector();
+        }
+    }
     
     // Event Listeners
     generateButton.addEventListener('click', generateCardsFromSelection);
@@ -98,26 +136,97 @@ document.addEventListener('DOMContentLoaded', () => {
     // Enable the button if there's already text in the selection
     handleTextSelection();
     
-    // Initialize UI
+    // Initialize UI and fetch decks
     updateButtonStates();
     
-    // Set up default deck display and make it clickable to change
-    defaultDeckDisplay.textContent = state.defaultDeck;
-    defaultDeckDisplay.addEventListener('click', changeDefaultDeck);
+    // Fetch decks from Mochi API on startup
+    fetchDecks().catch(error => {
+        console.error('Error initializing decks:', error);
+        // Create a fallback deck selector in case of error
+        createDeckSelector();
+    });
     
-    // Function to change the default deck
-    function changeDefaultDeck() {
-        const deckNames = Object.keys(state.decks);
+    // Function to create deck selector dropdown
+    function createDeckSelector() {
+        // Find the element where the old defaultDeckDisplay was
+        const deckControlsContainer = document.querySelector('.tab-actions #cards-controls');
         
-        const newDefaultDeck = prompt(
-            `Select a default deck for new cards:\n${deckNames.join('\n')}`, 
-            state.defaultDeck
+        // Remove the old elements if they exist
+        const oldLabel = deckControlsContainer.querySelector('.default-deck-label');
+        const oldDisplay = deckControlsContainer.querySelector('#defaultDeckDisplay');
+        
+        if (oldLabel) oldLabel.remove();
+        if (oldDisplay) oldDisplay.remove();
+        
+        // Create new deck selector elements
+        const deckLabel = document.createElement('span');
+        deckLabel.className = 'deck-selector-label';
+        deckLabel.textContent = 'Deck:';
+        
+        const deckSelector = document.createElement('select');
+        deckSelector.id = 'deckSelector';
+        deckSelector.className = 'deck-selector';
+        
+        // Get deck names and sort them alphabetically
+        const sortedDeckNames = Object.keys(state.decks).sort((a, b) => 
+            a.localeCompare(b, undefined, { sensitivity: 'base' })
         );
         
-        if (newDefaultDeck && deckNames.includes(newDefaultDeck)) {
-            state.defaultDeck = newDefaultDeck;
-            defaultDeckDisplay.textContent = newDefaultDeck;
-        }
+        // Add options based on available decks
+        sortedDeckNames.forEach(deckName => {
+            const option = document.createElement('option');
+            option.value = deckName;
+            option.textContent = deckName;
+            if (deckName === state.currentDeck) {
+                option.selected = true;
+            }
+            deckSelector.appendChild(option);
+        });
+        
+        // Add event listener to update current deck when changed
+        deckSelector.addEventListener('change', () => {
+            state.currentDeck = deckSelector.value;
+        });
+        
+        // Create refresh button to reload decks
+        const refreshButton = document.createElement('button');
+        refreshButton.className = 'refresh-decks-button';
+        refreshButton.title = 'Refresh deck list from Mochi';
+        refreshButton.innerHTML = '↻';
+        refreshButton.addEventListener('click', () => {
+            fetchDecks().then(() => {
+                // Show a brief confirmation
+                refreshButton.innerHTML = '✓';
+                refreshButton.disabled = true;
+                setTimeout(() => {
+                    refreshButton.innerHTML = '↻';
+                    refreshButton.disabled = false;
+                }, 1500);
+            }).catch(error => {
+                console.error('Error refreshing decks:', error);
+                refreshButton.innerHTML = '✗';
+                setTimeout(() => {
+                    refreshButton.innerHTML = '↻';
+                }, 1500);
+            });
+        });
+        
+        // Create a small info label to show deck count
+        const deckCount = document.createElement('small');
+        deckCount.className = 'deck-count';
+        const count = Object.keys(state.decks).length;
+        deckCount.textContent = `(${count} deck${count !== 1 ? 's' : ''})`;
+        
+        // Create a container for the deck selector and count
+        const deckSelectorContainer = document.createElement('div');
+        deckSelectorContainer.className = 'deck-selector-container';
+        deckSelectorContainer.appendChild(deckSelector);
+        deckSelectorContainer.appendChild(refreshButton);
+        
+        // Insert new elements at the beginning of the controls container
+        deckControlsContainer.insertBefore(deckSelectorContainer, deckControlsContainer.firstChild);
+        deckControlsContainer.insertBefore(deckLabel, deckControlsContainer.firstChild);
+        deckLabel.appendChild(deckCount);
     }
     
     // Set up the resizable splitter
@@ -260,8 +369,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Then highlight the selected text
             highlightSelection();
             
-            // Get cards from Claude API using the default deck from state
-            const cards = await generateCardsWithClaude(selectedText, state.defaultDeck);
+            // Get cards from Claude API using the current deck and available deck options
+            const cards = await generateCardsWithClaude(
+                selectedText, 
+                state.currentDeck,
+                Object.keys(state.decks).join(', ')
+            );
             
             // Add generated cards to state
             state.cards = [...state.cards, ...cards];
@@ -516,15 +629,63 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = state.cards[index];
         const deckNames = Object.keys(state.decks);
         
-        const newDeck = prompt(
-            `Select a deck for this card:\n${deckNames.join('\n')}`, 
-            card.deck
+        // Instead of a prompt, create a modal dialog with a dropdown
+        const modalOverlay = document.createElement('div');
+        modalOverlay.className = 'modal-overlay';
+        
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        
+        const modalHeader = document.createElement('h3');
+        modalHeader.textContent = 'Select deck for this card';
+        
+        const deckSelect = document.createElement('select');
+        deckSelect.className = 'deck-select';
+        
+        // Get deck names and sort them alphabetically
+        const sortedDeckNames = deckNames.sort((a, b) => 
+            a.localeCompare(b, undefined, { sensitivity: 'base' })
         );
         
-        if (newDeck && deckNames.includes(newDeck)) {
-            card.deck = newDeck;
+        // Add options based on available decks
+        sortedDeckNames.forEach(deckName => {
+            const option = document.createElement('option');
+            option.value = deckName;
+            option.textContent = deckName;
+            if (deckName === card.deck) {
+                option.selected = true;
+            }
+            deckSelect.appendChild(option);
+        });
+        
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'modal-buttons';
+        
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'Cancel';
+        cancelButton.className = 'modal-cancel';
+        cancelButton.addEventListener('click', () => {
+            document.body.removeChild(modalOverlay);
+        });
+        
+        const saveButton = document.createElement('button');
+        saveButton.textContent = 'Save';
+        saveButton.className = 'modal-save';
+        saveButton.addEventListener('click', () => {
+            card.deck = deckSelect.value;
             renderCards();
-        }
+            document.body.removeChild(modalOverlay);
+        });
+        
+        buttonContainer.appendChild(cancelButton);
+        buttonContainer.appendChild(saveButton);
+        
+        modalContent.appendChild(modalHeader);
+        modalContent.appendChild(deckSelect);
+        modalContent.appendChild(buttonContainer);
+        
+        modalOverlay.appendChild(modalContent);
+        document.body.appendChild(modalOverlay);
     }
     
     function updateButtonStates() {
@@ -629,9 +790,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const deckMap = {};
         
         state.cards.forEach(card => {
-            const deckId = state.decks[card.deck];
+            const deckName = card.deck;
+            const deckId = state.decks[deckName];
+            
             if (!deckId) {
-                console.warn(`No deck ID found for deck: ${card.deck}`);
+                console.warn(`No deck ID found for deck: ${deckName}`);
                 return; // Skip this card
             }
             
@@ -651,14 +814,12 @@ document.addEventListener('DOMContentLoaded', () => {
             cards: []
         };
         
-        // Add cards with their deck IDs (clean format)
+        // Add cards with their deck IDs
         for (const [deckId, cards] of Object.entries(deckMap)) {
-            const cleanDeckId = deckId.replace(/\[\[|\]\]/g, ''); // Remove [[ ]] if present
-            
             cards.forEach(card => {
                 data.cards.push({
                     ...card,
-                    'deck-id': cleanDeckId
+                    'deck-id': deckId
                 });
             });
         }
