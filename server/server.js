@@ -20,7 +20,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: [
+    'http://localhost:3000', 
+    'https://spaced-rep.vercel.app',
+    'https://spaced-rep-ten.vercel.app',
+    'https://pod-prep.com',
+    new RegExp(/https:\/\/spaced-.*\.vercel\.app/)
+  ],
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../src')));
 
@@ -397,6 +406,11 @@ app.post('/api/upload-to-mochi', async (req, res) => {
     console.error('Server error during Mochi upload:', error);
     res.status(500).json({ error: error.message });
   }
+});
+
+// Health check route for Vercel
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Serve the main app

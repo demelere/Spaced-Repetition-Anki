@@ -134,6 +134,12 @@ async function generateCardsWithClaude(text, defaultDeck, deckOptions = '') {
         return parseClaudeResponse(data, defaultDeck);
     } catch (error) {
         console.error('Error calling API:', error);
+        
+        // Check if this might be a CORS error
+        if (error.message && error.message.includes('Failed to fetch')) {
+            throw new Error('Network error: Unable to connect to the API service. This may be due to CORS restrictions or the server being unavailable. Please try again later or contact support.');
+        }
+        
         throw error;
     }
 }
@@ -174,6 +180,12 @@ async function generateQuestionsWithClaude(text) {
         return parseQuestionsResponse(data);
     } catch (error) {
         console.error('Error calling questions API:', error);
+        
+        // Check if this might be a CORS error
+        if (error.message && error.message.includes('Failed to fetch')) {
+            throw new Error('Network error: Unable to connect to the API service. This may be due to CORS restrictions or the server being unavailable. Please try again later or contact support.');
+        }
+        
         throw error;
     }
 }
