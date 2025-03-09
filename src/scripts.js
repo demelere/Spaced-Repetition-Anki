@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cardsControlGroup = document.getElementById('cards-controls');
     const questionsControlGroup = document.getElementById('questions-controls');
     const splitterHandle = document.querySelector('.splitter-handle');
+    const defaultDeckDisplay = document.getElementById('defaultDeckDisplay');
     
     // App State
     const state = {
@@ -99,6 +100,25 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Initialize UI
     updateButtonStates();
+    
+    // Set up default deck display and make it clickable to change
+    defaultDeckDisplay.textContent = state.defaultDeck;
+    defaultDeckDisplay.addEventListener('click', changeDefaultDeck);
+    
+    // Function to change the default deck
+    function changeDefaultDeck() {
+        const deckNames = Object.keys(state.decks);
+        
+        const newDefaultDeck = prompt(
+            `Select a default deck for new cards:\n${deckNames.join('\n')}`, 
+            state.defaultDeck
+        );
+        
+        if (newDefaultDeck && deckNames.includes(newDefaultDeck)) {
+            state.defaultDeck = newDefaultDeck;
+            defaultDeckDisplay.textContent = newDefaultDeck;
+        }
+    }
     
     // Set up the resizable splitter
     let isResizing = false;
@@ -391,8 +411,13 @@ document.addEventListener('DOMContentLoaded', () => {
         
         cardDiv.innerHTML = `
             <div class="card-header">
-                <span>Card #${index + 1}</span>
-                <span class="card-deck">${deck}</span>
+                <div class="card-header-left">
+                    <span class="card-deck">${deck}</span>
+                </div>
+                <div class="card-header-right">
+                    <button class="edit-deck-button">Change Deck</button>
+                    <button class="delete-button" data-index="${index}">Delete</button>
+                </div>
             </div>
             <div class="card-content">
                 <div class="card-front">
@@ -403,10 +428,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div class="card-label">Answer:</div>
                     <div class="card-text" contenteditable="true">${back}</div>
                 </div>
-            </div>
-            <div class="card-actions">
-                <button class="edit-deck-button">Change Deck</button>
-                <button class="delete-button" data-index="${index}">Delete</button>
             </div>
         `;
         
@@ -454,14 +475,15 @@ document.addEventListener('DOMContentLoaded', () => {
         
         questionDiv.innerHTML = `
             <div class="question-header">
-                <span class="question-topic">${topic}</span>
-                <span>Q${index + 1}</span>
+                <div class="question-header-left">
+                    <span class="question-topic">${topic}</span>
+                </div>
+                <div class="question-header-right">
+                    <button class="delete-question-button" data-index="${index}">Delete</button>
+                </div>
             </div>
             <div class="question-body">
                 <div class="question-text" contenteditable="true">${questionText}</div>
-            </div>
-            <div class="question-actions">
-                <button class="delete-question-button" data-index="${index}">Delete</button>
             </div>
         `;
         

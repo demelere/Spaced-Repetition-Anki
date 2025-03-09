@@ -401,7 +401,7 @@ button.primary-action:disabled {
     box-shadow: var(--card-shadow);
     display: flex;
     flex-direction: column;
-    min-height: 180px; /* Minimum height */
+    min-height: 160px; /* Reduced minimum height */
     height: auto; /* Auto height based on content */
 }
 
@@ -418,8 +418,21 @@ button.primary-action:disabled {
     background-color: var(--primary-light);
     border-bottom: 1px solid var(--gray-200);
     font-size: 12px;
-    height: 34px;
-    min-height: 34px;
+    height: 42px;
+    min-height: 42px;
+}
+
+.card-header-left, .card-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.card-header button {
+    padding: 3px 8px;
+    font-size: 11px;
+    border-radius: 3px;
+    height: 26px;
 }
 
 .card-deck {
@@ -431,6 +444,27 @@ button.primary-action:disabled {
     padding: 2px 8px;
     border-radius: 4px;
     line-height: 1.3;
+}
+
+.default-deck-label {
+    font-size: 10px;
+    color: var(--gray-600);
+    margin-right: 8px;
+}
+
+.default-deck {
+    font-size: 11px;
+    color: var(--primary-color);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: 3px;
+    transition: background-color 0.2s ease;
+}
+
+.default-deck:hover {
+    background-color: var(--primary-light);
+    text-decoration: underline;
 }
 
 .card-content {
@@ -481,29 +515,25 @@ button.primary-action:disabled {
     border-color: var(--primary-color);
 }
 
-.card-actions {
-    display: flex;
-    justify-content: space-between;
-    padding: 6px 10px;
-    border-top: 1px solid var(--gray-200);
-    background-color: var(--gray-50);
-    min-height: 38px;
-}
-
-.card-actions button {
-    padding: 4px 10px;
-    font-size: 12px;
-    font-weight: 500;
-}
+/* Removed card-actions styles as we're moving buttons to header */
 
 .delete-button {
     color: #d93025;
     background-color: transparent;
     border-color: #d93025;
+    min-width: auto;
+    height: 26px;
+    padding: 3px 6px;
 }
 
 .delete-button:hover {
     background-color: #fce8e6;
+}
+
+.edit-deck-button {
+    background-color: transparent;
+    border-color: var(--gray-300);
+    color: var(--gray-700);
 }
 
 /* Questions Container */
@@ -523,7 +553,7 @@ button.primary-action:disabled {
     box-shadow: var(--card-shadow);
     display: flex;
     flex-direction: column;
-    min-height: 100px;
+    min-height: 85px;
     height: auto; /* Auto height based on content */
 }
 
@@ -540,8 +570,21 @@ button.primary-action:disabled {
     background-color: var(--primary-light);
     border-bottom: 1px solid var(--gray-200);
     font-size: 12px;
-    height: 34px;
-    min-height: 34px;
+    height: 42px;
+    min-height: 42px;
+}
+
+.question-header-left, .question-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.question-header button {
+    padding: 3px 8px;
+    font-size: 11px;
+    border-radius: 3px;
+    height: 26px;
 }
 
 .question-topic {
@@ -573,19 +616,17 @@ button.primary-action:disabled {
     padding: 5px 0;
 }
 
-.question-actions {
-    display: flex;
-    justify-content: flex-end;
-    padding: 6px 10px;
-    border-top: 1px solid var(--gray-200);
-    background-color: var(--gray-50);
-    min-height: 38px;
+/* Removed question-actions styles as we moved buttons to the header */
+
+.delete-question-button {
+    color: #d93025;
+    background-color: transparent;
+    border-color: #d93025;
+    min-width: auto;
 }
 
-.question-actions button {
-    padding: 4px 10px;
-    font-size: 12px;
-    font-weight: 500;
+.delete-question-button:hover {
+    background-color: #fce8e6;
 }
 
 /* Text formatting within the input */
