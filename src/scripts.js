@@ -77,6 +77,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
+    // Function to show status notifications
+    function showNotification(message, type = 'info', duration = 3000) {
+        // Remove any existing notification
+        const existingNotification = document.querySelector('.status-notification');
+        if (existingNotification) {
+            existingNotification.remove();
+        }
+        
+        // Create notification element
+        const notification = document.createElement('div');
+        notification.className = `status-notification ${type}`;
+        
+        // Add icon
+        const icon = document.createElement('span');
+        icon.className = 'icon';
+        notification.appendChild(icon);
+        
+        // Add message
+        const messageEl = document.createElement('span');
+        messageEl.textContent = message;
+        notification.appendChild(messageEl);
+        
+        // Add to document
+        document.body.appendChild(notification);
+        
+        // Show notification with animation
+        setTimeout(() => {
+            notification.classList.add('show');
+        }, 10);
+        
+        // Hide after duration
+        setTimeout(() => {
+            notification.classList.remove('show');
+            setTimeout(() => {
+                notification.remove();
+            }, 300);
+        }, duration);
+        
+        return notification;
+    }
+    
     // Event Listeners
     generateButton.addEventListener('click', generateCardsFromSelection);
     generateQuestionsButton.addEventListener('click', generateQuestionsFromSelection);
@@ -146,87 +187,13 @@ document.addEventListener('DOMContentLoaded', () => {
         createDeckSelector();
     });
     
-    // Function to create deck selector dropdown
+    // We no longer need a deck selector in the main UI - we'll only show it when editing a card
     function createDeckSelector() {
-        // Find the element where the old defaultDeckDisplay was
-        const deckControlsContainer = document.querySelector('.tab-actions #cards-controls');
-        
-        // Remove the old elements if they exist
-        const oldLabel = deckControlsContainer.querySelector('.default-deck-label');
-        const oldDisplay = deckControlsContainer.querySelector('#defaultDeckDisplay');
-        
-        if (oldLabel) oldLabel.remove();
-        if (oldDisplay) oldDisplay.remove();
-        
-        // Create new deck selector elements
-        const deckLabel = document.createElement('span');
-        deckLabel.className = 'deck-selector-label';
-        deckLabel.textContent = 'Deck:';
-        
-        const deckSelector = document.createElement('select');
-        deckSelector.id = 'deckSelector';
-        deckSelector.className = 'deck-selector';
-        
-        // Get deck names and sort them alphabetically
-        const sortedDeckNames = Object.keys(state.decks).sort((a, b) => 
-            a.localeCompare(b, undefined, { sensitivity: 'base' })
-        );
-        
-        // Add options based on available decks
-        sortedDeckNames.forEach(deckName => {
-            const option = document.createElement('option');
-            option.value = deckName;
-            option.textContent = deckName;
-            if (deckName === state.currentDeck) {
-                option.selected = true;
-            }
-            deckSelector.appendChild(option);
-        });
-        
-        // Add event listener to update current deck when changed
-        deckSelector.addEventListener('change', () => {
-            state.currentDeck = deckSelector.value;
-        });
-        
-        // Create refresh button to reload decks
-        const refreshButton = document.createElement('button');
-        refreshButton.className = 'refresh-decks-button';
-        refreshButton.title = 'Refresh deck list from Mochi';
-        refreshButton.innerHTML = '↻';
-        refreshButton.addEventListener('click', () => {
-            fetchDecks().then(() => {
-                // Show a brief confirmation
-                refreshButton.innerHTML = '✓';
-                refreshButton.disabled = true;
-                setTimeout(() => {
-                    refreshButton.innerHTML = '↻';
-                    refreshButton.disabled = false;
-                }, 1500);
-            }).catch(error => {
-                console.error('Error refreshing decks:', error);
-                refreshButton.innerHTML = '✗';
-                setTimeout(() => {
-                    refreshButton.innerHTML = '↻';
-                }, 1500);
-            });
-        });
-        
-        // Create a small info label to show deck count
-        const deckCount = document.createElement('small');
-        deckCount.className = 'deck-count';
-        const count = Object.keys(state.decks).length;
-        deckCount.textContent = `(${count} deck${count !== 1 ? 's' : ''})`;
-        
-        // Create a container for the deck selector and count
-        const deckSelectorContainer = document.createElement('div');
-        deckSelectorContainer.className = 'deck-selector-container';
-        deckSelectorContainer.appendChild(deckSelector);
-        deckSelectorContainer.appendChild(refreshButton);
-        
-        // Insert new elements at the beginning of the controls container
-        deckControlsContainer.insertBefore(deckSelectorContainer, deckControlsContainer.firstChild);
-        deckControlsContainer.insertBefore(deckLabel, deckControlsContainer.firstChild);
-        deckLabel.appendChild(deckCount);
+        // Simply set the default current deck if none is set yet
+        if (!state.currentDeck && Object.keys(state.decks).length > 0) {
+            state.currentDeck = Object.keys(state.decks)[0];
+        }
+        // No UI elements to create here anymore
     }
     
     // Set up the resizable splitter
@@ -629,7 +596,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const card = state.cards[index];
         const deckNames = Object.keys(state.decks);
         
-        // Instead of a prompt, create a modal dialog with a dropdown
+        if (deckNames.length === 0) {
+            showNotification('No decks available. Please check Mochi connection.', 'error');
+            return;
+        }
+        
+        // Create an improved modal dialog with a dropdown
         const modalOverlay = document.createElement('div');
         modalOverlay.className = 'modal-overlay';
         
@@ -637,10 +609,63 @@ document.addEventListener('DOMContentLoaded', () => {
         modalContent.className = 'modal-content';
         
         const modalHeader = document.createElement('h3');
-        modalHeader.textContent = 'Select deck for this card';
+        modalHeader.textContent = 'Select Deck';
+        
+        const modalSubHeader = document.createElement('p');
+        modalSubHeader.className = 'modal-subheader';
+        modalSubHeader.textContent = 'Choose a deck for this card:';
+        
+        // Create a styled select element
+        const selectContainer = document.createElement('div');
+        selectContainer.className = 'modal-select-container';
         
         const deckSelect = document.createElement('select');
         deckSelect.className = 'deck-select';
+        
+        // Add a refresh button
+        const refreshButton = document.createElement('button');
+        refreshButton.className = 'modal-refresh-button';
+        refreshButton.title = 'Refresh deck list from Mochi';
+        refreshButton.innerHTML = '↻';
+        refreshButton.addEventListener('click', () => {
+            refreshButton.disabled = true;
+            
+            fetchDecks().then(() => {
+                // Update the select options
+                deckSelect.innerHTML = '';
+                const updatedDeckNames = Object.keys(state.decks).sort((a, b) => 
+                    a.localeCompare(b, undefined, { sensitivity: 'base' })
+                );
+                
+                updatedDeckNames.forEach(deckName => {
+                    const option = document.createElement('option');
+                    option.value = deckName;
+                    option.textContent = deckName;
+                    if (deckName === card.deck) {
+                        option.selected = true;
+                    }
+                    deckSelect.appendChild(option);
+                });
+                
+                // Show confirmation
+                refreshButton.innerHTML = '✓';
+                setTimeout(() => {
+                    refreshButton.innerHTML = '↻';
+                    refreshButton.disabled = false;
+                }, 1500);
+                
+                showNotification(`${updatedDeckNames.length} decks loaded`, 'success');
+            }).catch(error => {
+                console.error('Error refreshing decks:', error);
+                refreshButton.innerHTML = '✗';
+                setTimeout(() => {
+                    refreshButton.innerHTML = '↻';
+                    refreshButton.disabled = false;
+                }, 1500);
+                
+                showNotification('Failed to refresh decks', 'error');
+            });
+        });
         
         // Get deck names and sort them alphabetically
         const sortedDeckNames = deckNames.sort((a, b) => 
@@ -658,6 +683,10 @@ document.addEventListener('DOMContentLoaded', () => {
             deckSelect.appendChild(option);
         });
         
+        selectContainer.appendChild(deckSelect);
+        selectContainer.appendChild(refreshButton);
+        
+        // Create button container
         const buttonContainer = document.createElement('div');
         buttonContainer.className = 'modal-buttons';
         
@@ -669,19 +698,26 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         const saveButton = document.createElement('button');
-        saveButton.textContent = 'Save';
+        saveButton.textContent = 'Update Deck';
         saveButton.className = 'modal-save';
         saveButton.addEventListener('click', () => {
+            const oldDeck = card.deck;
             card.deck = deckSelect.value;
             renderCards();
             document.body.removeChild(modalOverlay);
+            
+            if (oldDeck !== card.deck) {
+                showNotification(`Card moved to "${card.deck}" deck`, 'success');
+            }
         });
         
         buttonContainer.appendChild(cancelButton);
         buttonContainer.appendChild(saveButton);
         
+        // Assemble the modal
         modalContent.appendChild(modalHeader);
-        modalContent.appendChild(deckSelect);
+        modalContent.appendChild(modalSubHeader);
+        modalContent.appendChild(selectContainer);
         modalContent.appendChild(buttonContainer);
         
         modalOverlay.appendChild(modalContent);
@@ -701,32 +737,124 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function clearAllCards() {
-        if (confirm('Are you sure you want to clear all cards?')) {
+        // Create modal confirmation
+        const modalOverlay = document.createElement('div');
+        modalOverlay.className = 'modal-overlay';
+        
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        
+        const modalHeader = document.createElement('h3');
+        modalHeader.textContent = 'Clear all cards?';
+        
+        const modalText = document.createElement('p');
+        modalText.textContent = 'This action cannot be undone.';
+        modalText.style.margin = '10px 0';
+        
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'modal-buttons';
+        
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'Cancel';
+        cancelButton.className = 'modal-cancel';
+        cancelButton.addEventListener('click', () => {
+            document.body.removeChild(modalOverlay);
+        });
+        
+        const confirmButton = document.createElement('button');
+        confirmButton.textContent = 'Clear All';
+        confirmButton.className = 'modal-confirm';
+        confirmButton.style.backgroundColor = '#ea4335';
+        confirmButton.style.color = 'white';
+        confirmButton.style.borderColor = '#d93025';
+        
+        confirmButton.addEventListener('click', () => {
             state.cards = [];
             renderCards();
             updateButtonStates();
-        }
+            document.body.removeChild(modalOverlay);
+            showNotification('All cards cleared', 'info');
+        });
+        
+        buttonContainer.appendChild(cancelButton);
+        buttonContainer.appendChild(confirmButton);
+        
+        modalContent.appendChild(modalHeader);
+        modalContent.appendChild(modalText);
+        modalContent.appendChild(buttonContainer);
+        
+        modalOverlay.appendChild(modalContent);
+        document.body.appendChild(modalOverlay);
     }
     
     function clearAllQuestions() {
-        if (confirm('Are you sure you want to clear all questions?')) {
+        // Create modal confirmation
+        const modalOverlay = document.createElement('div');
+        modalOverlay.className = 'modal-overlay';
+        
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        
+        const modalHeader = document.createElement('h3');
+        modalHeader.textContent = 'Clear all questions?';
+        
+        const modalText = document.createElement('p');
+        modalText.textContent = 'This action cannot be undone.';
+        modalText.style.margin = '10px 0';
+        
+        const buttonContainer = document.createElement('div');
+        buttonContainer.className = 'modal-buttons';
+        
+        const cancelButton = document.createElement('button');
+        cancelButton.textContent = 'Cancel';
+        cancelButton.className = 'modal-cancel';
+        cancelButton.addEventListener('click', () => {
+            document.body.removeChild(modalOverlay);
+        });
+        
+        const confirmButton = document.createElement('button');
+        confirmButton.textContent = 'Clear All';
+        confirmButton.className = 'modal-confirm';
+        confirmButton.style.backgroundColor = '#ea4335';
+        confirmButton.style.color = 'white';
+        confirmButton.style.borderColor = '#d93025';
+        
+        confirmButton.addEventListener('click', () => {
             state.questions = [];
             renderQuestions();
             updateButtonStates();
-        }
+            document.body.removeChild(modalOverlay);
+            showNotification('All questions cleared', 'info');
+        });
+        
+        buttonContainer.appendChild(cancelButton);
+        buttonContainer.appendChild(confirmButton);
+        
+        modalContent.appendChild(modalHeader);
+        modalContent.appendChild(modalText);
+        modalContent.appendChild(buttonContainer);
+        
+        modalOverlay.appendChild(modalContent);
+        document.body.appendChild(modalOverlay);
     }
+    
     
     async function exportToMochi() {
         try {
             const mochiData = formatCardsForMochi();
             const cards = JSON.parse(mochiData).cards;
             
+            if (cards.length === 0) {
+                showNotification('No cards to export', 'info');
+                return;
+            }
+            
             // First check if Mochi API integration is available
             const envResponse = await fetch('/api/env-status');
             const envStatus = await envResponse.json();
             
             if (!envStatus.hasMochiApiKey) {
-                alert('Mochi API key not configured. Falling back to download.');
+                showNotification('Mochi API key not configured. Downloading file instead.', 'info');
                 downloadExport(mochiData, `spaced-rep-cards-${new Date().toISOString().slice(0, 10)}.json`);
                 return;
             }
@@ -749,11 +877,14 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const result = await response.json();
-            alert(`${result.totalSuccess} of ${result.totalCards} cards uploaded to Mochi successfully!`);
+            
+            // Success notification
+            showNotification(`${result.totalSuccess} of ${result.totalCards} cards uploaded to Mochi successfully!`, 'success');
             
         } catch (error) {
             console.error('Error uploading to Mochi API:', error);
-            alert('Error uploading to Mochi. Falling back to download.');
+            showNotification('Error uploading to Mochi. Downloading file instead.', 'error');
+            
             const mochiData = formatCardsForMochi();
             downloadExport(mochiData, `spaced-rep-cards-${new Date().toISOString().slice(0, 10)}.json`);
         } finally {
@@ -765,6 +896,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     function exportQuestions() {
         // Format questions as bullet point markdown
+        if (state.questions.length === 0) {
+            showNotification('No questions to export', 'info');
+            return;
+        }
+        
         let questionsMarkdown = '';
         
         state.questions.forEach(q => {
@@ -783,6 +919,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }, 0);
+        
+        showNotification(`${state.questions.length} questions exported successfully`, 'success');
     }
     
     function formatCardsForMochi() {

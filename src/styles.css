@@ -467,7 +467,7 @@ button.primary-action:disabled {
 }
 
 .deck-selector {
-    min-width: 150px;
+    min-width: 180px;
     height: 30px;
     padding: 2px 8px;
     font-size: 13px;
@@ -514,6 +514,63 @@ button.primary-action:disabled {
     color: white;
 }
 
+/* Status notification */
+.status-notification {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    background-color: var(--white);
+    color: var(--gray-800);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    font-size: 14px;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    transform: translateY(20px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.status-notification.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.status-notification.success {
+    border-left: 4px solid #34a853;
+}
+
+.status-notification.error {
+    border-left: 4px solid #ea4335;
+}
+
+.status-notification.info {
+    border-left: 4px solid var(--primary-color);
+}
+
+.status-notification .icon {
+    font-size: 18px;
+}
+
+.status-notification.success .icon::before {
+    content: '✓';
+    color: #34a853;
+}
+
+.status-notification.error .icon::before {
+    content: '✗';
+    color: #ea4335;
+}
+
+.status-notification.info .icon::before {
+    content: 'ℹ';
+    color: var(--primary-color);
+}
+
 /* Modal styles for deck selection */
 .modal-overlay {
     position: fixed;
@@ -549,14 +606,58 @@ button.primary-action:disabled {
     border-bottom: 1px solid var(--gray-200);
 }
 
-.deck-select {
+.modal-subheader {
+    margin: 0 0 15px 0;
+    color: var(--gray-700);
+    font-size: 14px;
+}
+
+.modal-select-container {
+    display: flex;
+    margin-bottom: 20px;
     width: 100%;
+}
+
+.deck-select {
+    flex-grow: 1;
     padding: 10px;
     border: 1px solid var(--gray-300);
-    border-radius: 4px;
+    border-radius: 4px 0 0 4px;
     font-size: 14px;
     color: var(--gray-800);
     background-color: var(--white);
+    outline: none;
+}
+
+.deck-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 1px var(--primary-light);
+}
+
+.modal-refresh-button {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0 4px 4px 0;
+    margin-left: -1px;
+    font-size: 16px;
+    background-color: var(--gray-100);
+    border: 1px solid var(--gray-300);
+    cursor: pointer;
+}
+
+.modal-refresh-button:hover {
+    background-color: var(--primary-light);
+    border-color: var(--primary-color);
+    color: var(--primary-color);
+}
+
+.modal-refresh-button:active {
+    background-color: var(--primary-color);
+    color: white;
 }
 
 .modal-buttons {
