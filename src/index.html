@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dwarkesh Research Assistant</title>
+    <title>Mochi Card Generator</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="app-container">
         <header>
             <div class="header-content">
-                <h1>Research & Podcast Prep</h1>
+                <h1>Mochi Card Generator</h1>
                 <div class="header-controls">
                     <span id="selectionStatus" class="selection-counter">No text selected</span>
                     <div class="action-buttons">
@@ -68,6 +68,55 @@
                 </section>
             </div>
         </main>
+    </div>
+    
+    <!-- Settings button -->
+    <div id="settingsButton" class="settings-button">
+        <div class="settings-icon"></div>
+    </div>
+    
+    <!-- API Key Management Modal -->
+    <div id="apiKeyModal" class="api-key-overlay" style="display: none;">
+        <div class="api-key-container">
+            <div class="api-key-header">
+                <h2>API Key Setup</h2>
+                <p>Configure your API keys to use the Mochi Card Generator. API keys are stored securely in your browser and never sent to our servers.</p>
+            </div>
+            <div class="api-key-form">
+                <div class="api-key-input-group">
+                    <label for="anthropicApiKey">
+                        Claude API Key
+                        <span class="required">Required</span>
+                    </label>
+                    <input type="text" id="anthropicApiKey" placeholder="sk-ant-api03-..." autocomplete="off">
+                    <div class="api-key-help">
+                        Get your API key from <a href="https://console.anthropic.com/keys" target="_blank">console.anthropic.com/keys</a>
+                    </div>
+                    <div id="anthropicApiKeyError" class="api-key-error"></div>
+                </div>
+                
+                <div class="api-key-input-group">
+                    <label for="mochiApiKey">
+                        Mochi API Key
+                        <span class="optional">Optional</span>
+                    </label>
+                    <input type="text" id="mochiApiKey" placeholder="Your Mochi API key" autocomplete="off">
+                    <div class="api-key-help">
+                        Get your API key from the Mochi app. If not provided, cards will be exported as markdown.
+                    </div>
+                </div>
+                
+                <div class="api-key-toggle">
+                    <input type="checkbox" id="storeLocallyCheckbox" checked>
+                    <label for="storeLocallyCheckbox">Remember API keys on this device</label>
+                </div>
+                
+                <div class="api-key-actions">
+                    <button id="apiKeyCancel" class="api-key-button secondary">Cancel</button>
+                    <button id="apiKeySave" class="api-key-button primary">Save API Keys</button>
+                </div>
+            </div>
+        </div>
     </div>
     
     <script type="module" src="scripts.js"></script>

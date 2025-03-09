@@ -1,92 +1,88 @@
-# SpacedRep Card Creator - Project Documentation
+# Mochi Card Generator - Project Documentation
 
 ## Project Overview
 
-SpacedRep Card Creator is a web application that helps users create high-quality spaced repetition flashcards from text content. The application allows users to paste text, highlight sections of interest, and generate flashcards using Claude 3.7 to identify key concepts and create effective question-answer pairs.
+Mochi Card Generator is a web application that helps users create high-quality spaced repetition flashcards and interview questions from text content. The application allows users to paste text, highlight sections of interest, and use Claude 3.7 to generate effective content for learning and interviewing.
 
 ### Core Purpose
 
-The goal is to make it easy to create effective spaced repetition cards that follow best practices established by researchers like Michael Nielsen and Andy Matuschak. The application focuses on generating cards that build conceptual understanding rather than rote memorization.
+The goal is to streamline the creation of effective spaced repetition cards that follow best practices established by researchers like Michael Nielsen and Andy Matuschak. The application focuses on generating cards that build conceptual understanding rather than rote memorization, while also offering functionality to create interview questions for podcast preparation.
 
 ## Technical Architecture
 
 ### Frontend
 - Pure HTML/CSS/JavaScript implementation
 - Text input area with highlighting capabilities
-- Card preview and editing interface
-- Export functionality for Mochi app format
+- Card and question preview with inline editing
+- Modern UI with modals and notifications
+- Direct Mochi integration for seamless workflow
 
 ### Backend
 - Node.js Express server
-- Claude 3.7 API integration for card generation
+- Claude 3.7 API integration
+- Mochi API integration for deck management and direct upload
 - Environment variable-based API key management
 
 ## Key Functionality
 
 1. **Text Input & Selection**: 
-   - Users paste text and highlight sections they want to convert to flashcards
+   - Users paste text and highlight sections they want to convert to flashcards or questions
    - Text is properly sanitized and displayed with preserved formatting
+   - Resizable interface with split-panel design
 
 2. **Card Generation**:
    - Highlighted text is sent to Claude 3.7 via the server
    - Claude generates 1-5 cards based on content complexity
    - Cards follow best practices for spaced repetition learning
-   - Claude suggests appropriate deck categorization
+   - Appropriate deck categorization based on Mochi decks
 
-3. **Card Format**:
-   - Each card has:
-     - Front (question/prompt)
-     - Back (answer/explanation)
-     - Deck category from predefined options
+3. **Question Generation**:
+   - Highlighted text is analyzed to create podcast interview questions
+   - Questions focus on thought-provoking, open-ended inquiries
+   - Topic tags are automatically generated for organization
+   - Questions can be exported as markdown
 
-4. **Deck Categorization**:
-   - CS/Hardware
-   - Math/Physics
-   - AI/Alignment
-   - History/Military/Current
-   - Quotes/Random
-   - Bio
-   - Econ/Finance
+4. **Mochi Integration**:
+   - Dynamic fetching of deck list from user's Mochi account
+   - Direct upload to Mochi without file handling
+   - Proper filtering for active decks (excludes trashed/archived)
+   - Fallback to file export if API integration is unavailable
 
-5. **Export**:
-   - Cards can be exported in Mochi-compatible JSON format
-   - Each deck has a specific ID for proper categorization in Mochi
+5. **User Experience**:
+   - Modern notification system instead of alerts
+   - Confirmation modals for destructive actions
+   - Tabbed interface for cards and questions
+   - Inline editing of all generated content
 
 ## Implementation Details
 
 ### API Communication
 
-- Claude API is accessed through server-side endpoint
-- API calls request JSON-formatted response
-- Format examples are provided in the system prompt
-- JSON responses are parsed and validated
+- Claude API for intelligent content generation
+- Mochi API for deck management and card uploads
+- Structured JSON formats for reliable data exchange
+- Proper error handling with graceful fallbacks
 
-### Card Parsing Logic
+### Data Management
 
-- Response is expected in JSON format
-- Multiple fallback parsing methods if needed
-- Graceful error handling with user feedback
+- Clean state management for cards and questions
+- Deck synchronization with Mochi
+- Data sanitization to prevent security issues
+- Proper escaping and formatting for exports
 
 ### UI Interaction
 
-- Text highlight triggers card generation
-- Generated cards can be edited, deleted or recategorized
-- Sanitization prevents HTML injection
-- Cards are stored in application state
+- Text highlighting triggers generation
+- Real-time inline editing of cards and questions
+- Responsive design with resizable panels
+- Modal-based interfaces for critical actions
 
 ## Environment Setup
 
 - Run with `npm start`
-- Requires Claude API key in environment variable `CLAUDE_API_KEY`
+- Requires Claude API key in environment variable `ANTHROPIC_API_KEY`
+- Optional Mochi API key in environment variable `MOCHI_API_KEY`
 - Server runs on port 3000 by default
-
-## Future Enhancements
-
-- PDF and EPUB text extraction
-- Integration with additional spaced repetition systems
-- Custom card templates
-- Improved collaboration features
-- Card organization and tagging
 
 ## Common Commands
 
@@ -100,11 +96,15 @@ npm run dev
 
 ## Notes on Development
 
-- The most critical aspect is generating high-quality cards that follow effective learning principles
 - Card quality depends heavily on Claude's understanding of the text and spaced repetition principles
-- The JSON format for Claude's response is critical for reliable parsing
-- Security considerations are important for user-generated content
+- Mochi API integration requires proper authentication and error handling
+- The application should gracefully degrade when APIs are unavailable
+- Modern UI patterns enhance usability without compromising performance
 
-## Project History
+## Future Enhancements
 
-This project was built to help create high-quality flashcards following the principles of effective learning as outlined by researchers in the field of spaced repetition. The goal is to make it easier to create cards that build conceptual understanding rather than mere memorization.
+- PDF and EPUB text extraction
+- Integration with additional spaced repetition systems
+- Improved authentication flow for Mochi
+- Offline functionality with local storage
+- Customizable card templates

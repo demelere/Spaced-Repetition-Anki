@@ -1,7 +1,64 @@
 // Configuration for Claude API
-// The API key will be loaded from the server environment
 const ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
-const CLAUDE_MODEL = "claude-3-7-sonnet-20250219"; // Updated to the latest model version
+const CLAUDE_MODEL = "claude-3-7-sonnet-20250219"; // Using the latest model version
+const API_KEY_STORAGE_KEY = "mochi_card_generator_api_keys";
+
+// Helper functions for API key management
+function getStoredApiKeys() {
+    try {
+        const storedData = localStorage.getItem(API_KEY_STORAGE_KEY);
+        if (storedData) {
+            return JSON.parse(storedData);
+        }
+    } catch (error) {
+        console.error('Error reading stored API keys:', error);
+    }
+    return { anthropicApiKey: null, mochiApiKey: null };
+}
+
+function storeApiKeys(anthropicApiKey, mochiApiKey, storeLocally = true) {
+    if (storeLocally) {
+        try {
+            localStorage.setItem(API_KEY_STORAGE_KEY, JSON.stringify({
+                anthropicApiKey,
+                mochiApiKey
+            }));
+            return true;
+        } catch (error) {
+            console.error('Error storing API keys:', error);
+            return false;
+        }
+    } else {
+        // If not storing locally, clear any existing keys
+        try {
+            localStorage.removeItem(API_KEY_STORAGE_KEY);
+        } catch (error) {
+            console.error('Error clearing API keys:', error);
+        }
+        return true;
+    }
+}
+
+function clearStoredApiKeys() {
+    try {
+        localStorage.removeItem(API_KEY_STORAGE_KEY);
+        return true;
+    } catch (error) {
+        console.error('Error clearing API keys:', error);
+        return false;
+    }
+}
+
+// API key validation helper
+function validateAnthropicApiKey(key) {
+    return key && key.startsWith('sk-ant-') && key.length > 20;
+}
+
+// Check if API keys are configured
+function hasApiKeys() {
+    const keys = getStoredApiKeys();
+    return !!keys.anthropicApiKey;
+}
 
 // The prompt instructions to guide Claude in generating high-quality flashcards
 // Based on principles from Michael Nielsen and Andy Matuschak
@@ -39,6 +96,8 @@ Generate between 1-5 cards depending on the complexity and amount of content in 
 
 /**
  * Calls Claude API to generate flashcards from text
+ * Uses server-side proxy with user-provided API key
+ * 
  * @param {string} text - The text selection to create cards from
  * @param {string} defaultDeck - The default deck category to use if Claude doesn't specify one
  * @param {string} deckOptions - Comma-separated list of available deck options
@@ -46,7 +105,10 @@ Generate between 1-5 cards depending on the complexity and amount of content in 
  */
 async function generateCardsWithClaude(text, defaultDeck, deckOptions = '') {
     try {
-        // Call the server endpoint that handles the API key safely
+        // Get stored API keys
+        const { anthropicApiKey } = getStoredApiKeys();
+        
+        // Call the server endpoint, passing the API key in the request if available
         const response = await fetch('/api/generate-cards', {
             method: 'POST',
             headers: {
@@ -55,7 +117,8 @@ async function generateCardsWithClaude(text, defaultDeck, deckOptions = '') {
             body: JSON.stringify({
                 text,
                 defaultDeck,
-                deckOptions
+                deckOptions,
+                userApiKey: anthropicApiKey || null // Send user's API key to the server
             })
         });
 
@@ -77,19 +140,25 @@ async function generateCardsWithClaude(text, defaultDeck, deckOptions = '') {
 
 /**
  * Calls Claude API to generate interview questions from text
+ * Uses server-side proxy with user-provided API key
+ * 
  * @param {string} text - The text selection to create questions from
  * @returns {Promise<Array>} - Array of question objects with question, notes, and topic properties
  */
 async function generateQuestionsWithClaude(text) {
     try {
-        // Call the server endpoint that handles the API key safely
+        // Get stored API keys
+        const { anthropicApiKey } = getStoredApiKeys();
+        
+        // Call the server endpoint, passing the API key in the request if available
         const response = await fetch('/api/generate-questions', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                text
+                text,
+                userApiKey: anthropicApiKey || null // Send user's API key to the server
             })
         });
 
@@ -313,5 +382,10 @@ function parseQuestionsResponse(responseData) {
 
 export { 
     generateCardsWithClaude,
-    generateQuestionsWithClaude
+    generateQuestionsWithClaude,
+    getStoredApiKeys,
+    storeApiKeys,
+    clearStoredApiKeys,
+    validateAnthropicApiKey,
+    hasApiKeys
 };

@@ -1,7 +1,115 @@
 // Import Claude API functions
-import { generateCardsWithClaude, generateQuestionsWithClaude } from './claude-api.js';
+import { 
+    generateCardsWithClaude, 
+    generateQuestionsWithClaude,
+    getStoredApiKeys,
+    storeApiKeys,
+    clearStoredApiKeys,
+    validateAnthropicApiKey,
+    hasApiKeys
+} from './claude-api.js';
 
 document.addEventListener('DOMContentLoaded', () => {
+    // API Key Management
+    const apiKeyModal = document.getElementById('apiKeyModal');
+    const settingsButton = document.getElementById('settingsButton');
+    const anthropicApiKeyInput = document.getElementById('anthropicApiKey');
+    const mochiApiKeyInput = document.getElementById('mochiApiKey');
+    const storeLocallyCheckbox = document.getElementById('storeLocallyCheckbox');
+    const apiKeySaveButton = document.getElementById('apiKeySave');
+    const apiKeyCancelButton = document.getElementById('apiKeyCancel');
+    const anthropicApiKeyError = document.getElementById('anthropicApiKeyError');
+    
+    // Check for stored API keys on startup
+    const storedKeys = getStoredApiKeys();
+    if (storedKeys.anthropicApiKey) {
+        // Pre-fill the form with stored keys (masked)
+        anthropicApiKeyInput.value = storedKeys.anthropicApiKey;
+        if (storedKeys.mochiApiKey) {
+            mochiApiKeyInput.value = storedKeys.mochiApiKey;
+        }
+    } else {
+        // Show API key modal on startup if no API keys are stored
+        showApiKeyModal();
+    }
+    
+    // Settings button opens the API key modal
+    settingsButton.addEventListener('click', showApiKeyModal);
+    
+    // Save button in API key modal
+    apiKeySaveButton.addEventListener('click', () => {
+        const anthropicKey = anthropicApiKeyInput.value.trim();
+        const mochiKey = mochiApiKeyInput.value.trim();
+        const storeLocally = storeLocallyCheckbox.checked;
+        
+        // Validate the Anthropic API key
+        if (!validateAnthropicApiKey(anthropicKey)) {
+            anthropicApiKeyError.textContent = 'Please enter a valid Claude API key (starts with sk-ant-)';
+            return;
+        }
+        
+        // Store the API keys
+        const saveSuccess = storeApiKeys(anthropicKey, mochiKey, storeLocally);
+        
+        if (saveSuccess) {
+            // Close the modal
+            apiKeyModal.style.display = 'none';
+            
+            // Update UI based on available keys
+            updateUiForApiKeys();
+            
+            // Show success notification
+            showNotification('API keys saved successfully', 'success');
+        } else {
+            // Show error notification
+            showNotification('Failed to save API keys', 'error');
+        }
+    });
+    
+    // Cancel button in API key modal
+    apiKeyCancelButton.addEventListener('click', () => {
+        // If we have API keys stored, just close the modal
+        if (hasApiKeys()) {
+            apiKeyModal.style.display = 'none';
+        } else {
+            // Otherwise, show a warning
+            if (confirm('Without an API key, the application cannot function. Are you sure you want to cancel?')) {
+                apiKeyModal.style.display = 'none';
+            }
+        }
+    });
+    
+    function showApiKeyModal() {
+        // Reset error message
+        anthropicApiKeyError.textContent = '';
+        
+        // Fill in the form with stored values if available
+        const storedKeys = getStoredApiKeys();
+        if (storedKeys.anthropicApiKey) {
+            anthropicApiKeyInput.value = storedKeys.anthropicApiKey;
+        }
+        if (storedKeys.mochiApiKey) {
+            mochiApiKeyInput.value = storedKeys.mochiApiKey;
+        }
+        
+        // Show the modal
+        apiKeyModal.style.display = 'flex';
+    }
+    
+    function updateUiForApiKeys() {
+        const keys = getStoredApiKeys();
+        
+        // Update export button text based on whether we have a Mochi API key
+        const exportButton = document.getElementById('exportButton');
+        if (keys.mochiApiKey) {
+            exportButton.textContent = 'Export to Mochi';
+        } else {
+            exportButton.textContent = 'Export as Markdown';
+        }
+    }
+    
+    // Call this on startup to set up the UI correctly
+    updateUiForApiKeys();
     // DOM Elements
     const textInput = document.getElementById('textInput');
     const generateButton = document.getElementById('generateButton');
@@ -32,35 +140,101 @@ document.addEventListener('DOMContentLoaded', () => {
     // Fetch decks from Mochi API
     async function fetchDecks() {
         try {
-            // First check if Mochi API integration is available
-            const envResponse = await fetch('/api/env-status');
-            const envStatus = await envResponse.json();
+            // Check if we have a client-side Mochi API key
+            const { mochiApiKey } = getStoredApiKeys();
             
-            if (!envStatus.hasMochiApiKey) {
+            if (!mochiApiKey) {
                 console.warn('Mochi API key not configured. Using fallback decks.');
                 state.decks = { "General": "general" };
                 state.currentDeck = "General";
+                
+                // Update export button text
+                const exportButton = document.getElementById('exportButton');
+                if (exportButton) {
+                    exportButton.textContent = 'Export as Markdown';
+                }
+                
                 return;
             }
             
-            const response = await fetch('/api/mochi-decks');
-            if (!response.ok) {
-                throw new Error('Failed to fetch decks from Mochi');
+            // First try to use the server endpoint with user's API key
+            try {
+                // Pass the user's Mochi API key to the server endpoint
+                const response = await fetch(`/api/mochi-decks?userMochiKey=${encodeURIComponent(mochiApiKey)}`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    if (data.success && data.decks) {
+                        // Store the decks in the state
+                        state.decks = data.decks;
+                        
+                        // Set currentDeck to first deck in the list
+                        state.currentDeck = Object.keys(data.decks)[0] || "General";
+                        console.log(`Loaded ${Object.keys(data.decks).length} active decks from Mochi`);
+                        return;
+                    }
+                }
+            } catch (serverError) {
+                console.warn('Server-side Mochi API failed:', serverError);
             }
             
-            const data = await response.json();
-            
-            if (data.success && data.decks) {
-                // Store the decks in the state
-                state.decks = data.decks;
+            // If server-side fails, try client-side API
+            if (mochiApiKey) {
+                // Mochi uses HTTP Basic Auth with API key followed by colon
+                const authHeader = `Basic ${btoa(`${mochiApiKey}:`)}`;
                 
-                // Set currentDeck to first deck in the list
-                state.currentDeck = Object.keys(data.decks)[0] || "General";
-                console.log(`Loaded ${Object.keys(data.decks).length} active decks from Mochi`);
-            } else if (data.fallbackDecks) {
-                state.decks = data.fallbackDecks;
-                state.currentDeck = Object.keys(data.fallbackDecks)[0] || "General";
-                console.warn('Using fallback decks:', state.decks);
+                try {
+                    // Directly call Mochi API from the client
+                    const response = await fetch('https://app.mochi.cards/api/decks/', {
+                        method: 'GET',
+                        headers: {
+                            'Authorization': authHeader
+                        }
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Mochi API Error: ${await response.text()}`);
+                    }
+                    
+                    const decksData = await response.json();
+                    
+                    // Transform data for client use
+                    const formattedDecks = {};
+                    let activeDecksCount = 0;
+                    
+                    decksData.docs.forEach(deck => {
+                        // Skip decks that are in trash or archived
+                        if (deck['trashed?'] || deck['archived?']) {
+                            return; // Skip this deck
+                        }
+                        
+                        // Only include active decks
+                        activeDecksCount++;
+                        
+                        // Remove [[ ]] if present in the ID
+                        const cleanId = deck.id.replace(/\[\[|\]\]/g, '');
+                        formattedDecks[deck.name] = cleanId;
+                    });
+                    
+                    console.log(`Loaded ${activeDecksCount} active decks out of ${decksData.docs.length} total decks from Mochi API`);
+                    
+                    // Store the decks in the state
+                    state.decks = formattedDecks;
+                    
+                    // Set currentDeck to first deck in the list
+                    state.currentDeck = Object.keys(formattedDecks)[0] || "General";
+                    
+                    // Update export button text
+                    const exportButton = document.getElementById('exportButton');
+                    if (exportButton) {
+                        exportButton.textContent = 'Export to Mochi';
+                    }
+                    
+                    return;
+                } catch (clientApiError) {
+                    console.error('Error using client-side Mochi API:', clientApiError);
+                }
             }
             
             // Create deck selector dropdown
@@ -841,35 +1015,39 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function exportToMochi() {
         try {
-            const mochiData = formatCardsForMochi();
-            const cards = JSON.parse(mochiData).cards;
-            
-            if (cards.length === 0) {
+            // Check if we have any cards to export
+            if (state.cards.length === 0) {
                 showNotification('No cards to export', 'info');
                 return;
             }
             
-            // First check if Mochi API integration is available
-            const envResponse = await fetch('/api/env-status');
-            const envStatus = await envResponse.json();
+            // Get the stored API keys
+            const { mochiApiKey } = getStoredApiKeys();
             
-            if (!envStatus.hasMochiApiKey) {
-                showNotification('Mochi API key not configured. Downloading file instead.', 'info');
-                downloadExport(mochiData, `spaced-rep-cards-${new Date().toISOString().slice(0, 10)}.json`);
+            // If no Mochi API key, export as markdown instead
+            if (!mochiApiKey) {
+                exportAsMarkdown();
                 return;
             }
+            
+            // If we have a Mochi API key, prepare the cards for Mochi
+            const mochiData = formatCardsForMochi();
+            const cards = JSON.parse(mochiData).cards;
             
             // Show loading indicator
             exportButton.disabled = true;
             exportButton.textContent = 'Uploading...';
             
-            // Use the server endpoint to handle Mochi uploads
+            // Use the server endpoint to handle Mochi uploads, passing the user's API key
             const response = await fetch('/api/upload-to-mochi', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ cards })
+                body: JSON.stringify({ 
+                    cards,
+                    userMochiKey: mochiApiKey // Pass the user's Mochi API key to the server
+                })
             });
             
             if (!response.ok) {
@@ -883,15 +1061,66 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (error) {
             console.error('Error uploading to Mochi API:', error);
-            showNotification('Error uploading to Mochi. Downloading file instead.', 'error');
+            showNotification('Error uploading to Mochi. Exporting as markdown instead.', 'error');
             
-            const mochiData = formatCardsForMochi();
-            downloadExport(mochiData, `spaced-rep-cards-${new Date().toISOString().slice(0, 10)}.json`);
+            // Fall back to markdown export
+            exportAsMarkdown();
         } finally {
             // Reset button state
             exportButton.disabled = false;
-            exportButton.textContent = 'Export to Mochi';
+            
+            // Update button text based on whether we have a Mochi API key
+            const { mochiApiKey } = getStoredApiKeys();
+            exportButton.textContent = mochiApiKey ? 'Export to Mochi' : 'Export as Markdown';
         }
+    }
+    
+    function exportAsMarkdown() {
+        if (state.cards.length === 0) {
+            showNotification('No cards to export', 'info');
+            return;
+        }
+        
+        // Format cards as markdown
+        let markdown = `# Flashcards - ${new Date().toLocaleDateString()}\n\n`;
+        
+        // Group cards by deck
+        const deckGroups = {};
+        
+        state.cards.forEach(card => {
+            const deckName = card.deck || 'General';
+            if (!deckGroups[deckName]) {
+                deckGroups[deckName] = [];
+            }
+            deckGroups[deckName].push(card);
+        });
+        
+        // Add each deck's cards to the markdown
+        for (const [deckName, cards] of Object.entries(deckGroups)) {
+            markdown += `## ${deckName}\n\n`;
+            
+            cards.forEach((card, index) => {
+                markdown += `### Card ${index + 1}\n\n`;
+                markdown += `**Question:** ${card.front}\n\n`;
+                markdown += `**Answer:** ${card.back}\n\n`;
+                markdown += `---\n\n`;
+            });
+        }
+        
+        // Download the markdown file
+        const blob = new Blob([markdown], { type: 'text/markdown' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `flashcards-${new Date().toISOString().slice(0, 10)}.md`;
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 0);
+        
+        showNotification(`${state.cards.length} cards exported as markdown`, 'success');
     }
     
     function exportQuestions() {

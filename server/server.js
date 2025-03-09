@@ -36,16 +36,16 @@ app.use((req, res, next) => {
 // API endpoint for Claude to generate cards
 app.post('/api/generate-cards', async (req, res) => {
   try {
-    const { text, defaultDeck } = req.body;
+    const { text, defaultDeck, userApiKey } = req.body;
     
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
     
-    // Get API key from environment
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // Use user-provided API key if available, otherwise fall back to environment variable
+    const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'API key not configured' });
+      return res.status(500).json({ error: 'API key not configured. Please provide a Claude API key.' });
     }
     
     // Claude system prompt
@@ -149,20 +149,20 @@ app.post('/api/generate-cards', async (req, res) => {
 // API endpoint for generating interview questions
 app.post('/api/generate-questions', async (req, res) => {
   try {
-    const { text } = req.body;
+    const { text, userApiKey } = req.body;
     
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
     
-    // Get API key from environment
-    const apiKey = process.env.ANTHROPIC_API_KEY;
+    // Use user-provided API key if available, otherwise fall back to environment variable
+    const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      return res.status(500).json({ error: 'API key not configured' });
+      return res.status(500).json({ error: 'API key not configured. Please provide a Claude API key.' });
     }
     
     // Claude system prompt for generating podcast interview questions
-    const systemPrompt = `You are an expert research assistant for the host of Dwarkesh Podcast, helping prepare insightful interview questions based on text excerpts.
+    const systemPrompt = `You are an expert research assistant for the host of a podcast, helping prepare insightful interview questions based on text excerpts.
 
     Guidelines for creating excellent interview questions:
     1. Focus on thought-provoking, open-ended questions that can't be answered with a simple yes/no
@@ -245,10 +245,13 @@ app.post('/api/generate-questions', async (req, res) => {
 // API endpoint to fetch decks from Mochi
 app.get('/api/mochi-decks', async (req, res) => {
   try {
-    // Get Mochi API key from environment
-    const mochiApiKey = process.env.MOCHI_API_KEY;
+    // Get Mochi API key from query parameter or environment
+    const mochiApiKey = req.query.userMochiKey || process.env.MOCHI_API_KEY;
     if (!mochiApiKey) {
-      return res.status(500).json({ error: 'Mochi API key not configured' });
+      return res.status(500).json({ 
+        error: 'Mochi API key not configured',
+        fallbackDecks: { "General": "general" }
+      });
     }
     
     // Mochi uses HTTP Basic Auth with API key followed by colon
@@ -320,14 +323,14 @@ app.get('/api/env-status', (req, res) => {
 // API endpoint for direct Mochi integration
 app.post('/api/upload-to-mochi', async (req, res) => {
   try {
-    const { cards } = req.body;
+    const { cards, userMochiKey } = req.body;
     
     if (!cards || !Array.isArray(cards)) {
       return res.status(400).json({ error: 'Cards array is required' });
     }
     
-    // Get Mochi API key from environment
-    const mochiApiKey = process.env.MOCHI_API_KEY;
+    // Get Mochi API key from request or environment
+    const mochiApiKey = userMochiKey || process.env.MOCHI_API_KEY;
     if (!mochiApiKey) {
       return res.status(500).json({ error: 'Mochi API key not configured' });
     }
