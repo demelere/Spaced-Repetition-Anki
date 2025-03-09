@@ -605,12 +605,18 @@ document.addEventListener('DOMContentLoaded', () => {
         
         state.cards.forEach(card => {
             const deckId = state.decks[card.deck];
+            if (!deckId) {
+                console.warn(`No deck ID found for deck: ${card.deck}`);
+                return; // Skip this card
+            }
+            
             if (!deckMap[deckId]) {
                 deckMap[deckId] = [];
             }
             
+            // Use the exact Mochi format: front \n---\n back (single newlines)
             deckMap[deckId].push({
-                content: `${card.front}\n\n---\n\n${card.back}`
+                content: `${card.front}\n---\n${card.back}`
             });
         });
         
@@ -620,16 +626,19 @@ document.addEventListener('DOMContentLoaded', () => {
             cards: []
         };
         
-        // Add cards with their deck IDs
+        // Add cards with their deck IDs (clean format)
         for (const [deckId, cards] of Object.entries(deckMap)) {
+            const cleanDeckId = deckId.replace(/\[\[|\]\]/g, ''); // Remove [[ ]] if present
+            
             cards.forEach(card => {
                 data.cards.push({
                     ...card,
-                    'deck-id': deckId.replace(/\[\[|\]\]/g, '') // Remove [[ ]] if needed
+                    'deck-id': cleanDeckId
                 });
             });
         }
         
+        console.log('Formatted cards for Mochi:', data);
         return JSON.stringify(data, null, 2);
     }
     

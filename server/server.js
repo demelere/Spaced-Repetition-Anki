@@ -256,6 +256,7 @@ app.get('/api/env-status', (req, res) => {
 // API endpoint for direct Mochi integration
 app.post('/api/upload-to-mochi', async (req, res) => {
   try {
+    console.log('Uploading to Mochi');
     const { cards } = req.body;
     
     if (!cards || !Array.isArray(cards)) {
@@ -264,20 +265,34 @@ app.post('/api/upload-to-mochi', async (req, res) => {
     
     // Get Mochi API key from environment
     const mochiApiKey = process.env.MOCHI_API_KEY;
+    console.log('Mochi API key:', mochiApiKey);
     if (!mochiApiKey) {
       return res.status(500).json({ error: 'Mochi API key not configured' });
     }
+    
+    console.log('Starting Mochi API upload');
+    
+    // Mochi uses HTTP Basic Auth with API key followed by colon
+    // Format: "Basic " + base64(apiKey + ":")
+    const base64ApiKey = Buffer.from(`${mochiApiKey}:`).toString('base64');
+    const authToken = `Basic ${base64ApiKey}`;
     
     // Upload each card to Mochi
     const results = [];
     
     for (const card of cards) {
       try {
+        console.log('Uploading card to Mochi:', JSON.stringify({
+          'content': card.content.substring(0, 20) + '...',
+          'deck-id': card['deck-id']
+        }));
+        
+        // Use HTTP Basic Auth header format
         const response = await fetch('https://app.mochi.cards/api/cards/', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Basic ${mochiApiKey}`
+            'Authorization': authToken
           },
           body: JSON.stringify({
             'content': card.content,
@@ -285,14 +300,23 @@ app.post('/api/upload-to-mochi', async (req, res) => {
           })
         });
         
+        const responseText = await response.text();
+        console.log('Mochi API response:', response.status, responseText.substring(0, 100));
+        
         if (response.ok) {
-          const responseData = await response.json();
-          results.push({ success: true, id: responseData.id });
+          let responseData;
+          try {
+            responseData = JSON.parse(responseText);
+            results.push({ success: true, id: responseData.id });
+          } catch (jsonError) {
+            console.error('Error parsing JSON response:', jsonError);
+            results.push({ success: true, response: responseText });
+          }
         } else {
-          const errorText = await response.text();
-          results.push({ success: false, error: errorText });
+          results.push({ success: false, error: responseText, status: response.status });
         }
       } catch (cardError) {
+        console.error('Error uploading to Mochi:', cardError);
         results.push({ success: false, error: cardError.message });
       }
     }
