@@ -170,17 +170,27 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Get plain text from clipboard
         if (e.clipboardData && e.clipboardData.getData) {
+            // Get the plain text
             const text = e.clipboardData.getData('text/plain');
             
-            // Insert text at cursor position
+            // Insert it at the cursor position using the standard command
             document.execCommand('insertText', false, text);
             
-            // Reset any text selection that might exist
-            window.getSelection().removeAllRanges();
+            // Clear any selection state
+            clearAllHighlights();
             
-            // Check for selection after paste
-            setTimeout(handleTextSelection, 0);
+            // Update the UI after a short delay
+            setTimeout(handleTextSelection, 50);
         }
+    }
+    
+    // Function to clear all highlights - super simplified approach
+    function clearAllHighlights() {
+        // Just remove the selection class - no DOM manipulation needed
+        textInput.classList.remove('has-selection');
+        
+        // Clear any selection in the window
+        window.getSelection().removeAllRanges();
     }
     
     function handleTextSelection() {
@@ -198,11 +208,16 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Update selection status text
         if (hasSelection) {
+            // Update word and character count
             const wordCount = selectedText.split(/\s+/).filter(Boolean).length;
             const charCount = selectedText.length;
             selectionStatus.textContent = `${wordCount} words, ${charCount} chars selected`;
+            
+            // Show a visual indication of selection
+            textInput.classList.add('has-selection');
         } else {
             selectionStatus.textContent = 'No text selected';
+            textInput.classList.remove('has-selection');
         }
     }
     
@@ -219,6 +234,12 @@ document.addEventListener('DOMContentLoaded', () => {
             generateButton.disabled = true;
             generateButton.textContent = 'Generating...';
             
+            // Clear any existing highlights first
+            clearAllHighlights();
+            
+            // Then highlight the selected text
+            highlightSelection();
+            
             // Get cards from Claude API using the default deck from state
             const cards = await generateCardsWithClaude(selectedText, state.defaultDeck);
             
@@ -231,9 +252,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update buttons state
             updateButtonStates();
             
-            // Highlight the selection
-            highlightSelection();
-            
             // Switch to cards tab
             switchToTab('cards-tab');
             
@@ -243,6 +261,9 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             generateButton.disabled = false;
             generateButton.textContent = 'Generate Cards';
+            
+            // No automatic clearing - highlight will remain visible
+            // until the user makes another selection or action
         }
     }
     
@@ -259,6 +280,12 @@ document.addEventListener('DOMContentLoaded', () => {
             generateQuestionsButton.disabled = true;
             generateQuestionsButton.textContent = 'Generating...';
             
+            // Clear any existing highlights first
+            clearAllHighlights();
+            
+            // Then highlight the selected text
+            highlightSelection();
+            
             // Get questions from Claude API
             const questions = await generateQuestionsWithClaude(selectedText);
             
@@ -271,9 +298,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update buttons state
             updateButtonStates();
             
-            // Highlight the selection
-            highlightSelection();
-            
             // Switch to questions tab
             switchToTab('questions-tab');
             
@@ -283,63 +307,42 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             generateQuestionsButton.disabled = false;
             generateQuestionsButton.textContent = 'Generate Questions';
+            
+            // No automatic clearing - highlight will remain visible
+            // until the user makes another selection or action
         }
     }
     
     // Chat functions removed
     
     
+    // Simple approach: We won't try to modify the DOM for highlighting.
+    // Instead, we'll create a new element that overlays the text.
+    
+    // Variable to track the highlight overlay element
+    let highlightOverlay = null;
+    
     function highlightSelection() {
-        // Get the current selection
-        const selection = window.getSelection();
-        if (!selection.rangeCount) return;
+        // Clear any existing highlight first
+        if (highlightOverlay) {
+            highlightOverlay.remove();
+            highlightOverlay = null;
+        }
         
         try {
-            // Get the range of the current selection
-            const range = selection.getRangeAt(0);
+            // Get the selected text from state
+            const selectedText = state.selectedText;
+            if (!selectedText || selectedText.length === 0) return;
             
-            // Check if the range is within our text input
-            if (!textInput.contains(range.commonAncestorContainer)) {
-                return;
-            }
+            // Instead of modifying the DOM, we'll just add a class to the text input
+            // to show the user their selection was registered
+            textInput.classList.add('has-selection');
             
-            // First clear any existing highlights
-            const existingHighlights = textInput.querySelectorAll('.highlight');
-            existingHighlights.forEach(highlight => {
-                // Get the parent node
-                const parent = highlight.parentNode;
-                // Replace the highlight with its contents
-                while (highlight.firstChild) {
-                    parent.insertBefore(highlight.firstChild, highlight);
-                }
-                // Remove the empty highlight element
-                parent.removeChild(highlight);
-            });
+            // That's it! We'll let the native browser selection handle the highlighting
+            // This is much more reliable than trying to manipulate the DOM
             
-            // Create a temporary marker for the selection
-            const marker = document.createElement('mark');
-            marker.className = 'highlight';
-            marker.style.backgroundColor = 'var(--highlight-color)';
-            marker.style.padding = '0';
-            marker.style.margin = '0';
-            marker.style.borderRadius = '2px';
-            
-            // Clone the range to avoid modifying the selection directly
-            const clonedRange = range.cloneRange();
-            
-            // Create a fragment of the selection
-            const contents = clonedRange.extractContents();
-            
-            // Add the contents to our marker
-            marker.appendChild(contents);
-            
-            // Insert the marker at the position of the selection
-            clonedRange.insertNode(marker);
-            
-            // Clear the selection
-            selection.removeAllRanges();
         } catch (e) {
-            console.warn('Could not highlight selection:', e);
+            console.error('Error in highlighting:', e);
         }
     }
     
@@ -393,11 +396,11 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
             <div class="card-content">
                 <div class="card-front">
-                    <div class="card-label">Front:</div>
+                    <div class="card-label">Question:</div>
                     <div class="card-text" contenteditable="true">${front}</div>
                 </div>
                 <div class="card-back">
-                    <div class="card-label">Back:</div>
+                    <div class="card-label">Answer:</div>
                     <div class="card-text" contenteditable="true">${back}</div>
                 </div>
             </div>

@@ -256,7 +256,6 @@ app.get('/api/env-status', (req, res) => {
 // API endpoint for direct Mochi integration
 app.post('/api/upload-to-mochi', async (req, res) => {
   try {
-    console.log('Uploading to Mochi');
     const { cards } = req.body;
     
     if (!cards || !Array.isArray(cards)) {
@@ -265,7 +264,6 @@ app.post('/api/upload-to-mochi', async (req, res) => {
     
     // Get Mochi API key from environment
     const mochiApiKey = process.env.MOCHI_API_KEY;
-    console.log('Mochi API key:', mochiApiKey);
     if (!mochiApiKey) {
       return res.status(500).json({ error: 'Mochi API key not configured' });
     }

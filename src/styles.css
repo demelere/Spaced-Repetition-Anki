@@ -44,7 +44,7 @@
     
     /* Layout */
     --header-height: 60px;
-    --editor-default-height: 45%;
+    --editor-default-height: 65%;
 }
 
 body {
@@ -223,7 +223,7 @@ button.primary-action:disabled {
 
 /* Splitter Handle */
 .splitter-handle {
-    height: 10px;
+    height: 14px;
     background-color: var(--gray-100);
     cursor: row-resize;
     display: flex;
@@ -232,12 +232,19 @@ button.primary-action:disabled {
     user-select: none;
     position: relative;
     z-index: 10;
+    border-top: 1px solid var(--gray-200);
+    border-bottom: 1px solid var(--gray-200);
+    transition: background-color 0.2s ease;
+}
+
+.splitter-handle:hover {
+    background-color: var(--gray-200);
 }
 
 .handle-line {
-    width: 30px;
+    width: 50px;
     height: 4px;
-    background-color: var(--gray-300);
+    background-color: var(--gray-400);
     border-radius: 2px;
 }
 
@@ -255,9 +262,10 @@ button.primary-action:disabled {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 16px;
+    padding: 10px 20px;
     background-color: var(--gray-50);
     border-bottom: 1px solid var(--gray-200);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .tab-buttons {
@@ -267,13 +275,13 @@ button.primary-action:disabled {
 
 .tab-button {
     background-color: transparent;
-    border: none;
+    border: 1px solid transparent;
     color: var(--gray-700);
-    padding: 6px 12px;
+    padding: 8px 16px;
     font-weight: 500;
-    font-size: 13px;
+    font-size: 14px;
     border-radius: 4px;
-    transition: background-color 0.15s, color 0.15s;
+    transition: all 0.2s ease;
 }
 
 .tab-button:hover {
@@ -284,13 +292,18 @@ button.primary-action:disabled {
 .tab-button.active {
     color: var(--primary-color);
     background-color: var(--primary-light);
+    border-color: var(--primary-color);
     font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .tab-button span {
-    font-size: 11px;
-    opacity: 0.8;
-    margin-left: 3px;
+    font-size: 12px;
+    background-color: rgba(0, 0, 0, 0.05);
+    border-radius: 10px;
+    padding: 1px 6px;
+    margin-left: 5px;
+    display: inline-block;
 }
 
 .tab-actions {
@@ -318,7 +331,7 @@ button.primary-action:disabled {
     display: none;
     height: 100%;
     width: 100%;
-    padding: 16px;
+    padding: 0;
     overflow-y: auto;
     position: absolute;
     top: 0;
@@ -327,6 +340,7 @@ button.primary-action:disabled {
     bottom: 0;
     opacity: 0;
     transition: opacity 0.2s ease-in-out;
+    background-color: var(--gray-100);
 }
 
 .tab-content.active {
@@ -335,8 +349,20 @@ button.primary-action:disabled {
 }
 
 /* Highlight styles */
-.highlight, ::selection {
+/* Simple selection styles */
+::selection {
     background-color: var(--highlight-color);
+}
+
+/* Class for indicating text is selected */
+.text-input.has-selection ::selection {
+    background-color: var(--highlight-color);
+}
+
+/* Add a subtle border to show selection status */
+.text-input.has-selection {
+    outline: 2px solid var(--primary-light);
+    background-color: rgba(251, 237, 172, 0.1);
 }
 
 /* Custom Scrollbar */
@@ -361,9 +387,9 @@ button.primary-action:disabled {
 /* Cards Container */
 .cards-container {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-    gap: 16px;
-    padding-bottom: 20px;
+    grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+    gap: 20px;
+    padding: 20px;
 }
 
 .card {
@@ -375,7 +401,8 @@ button.primary-action:disabled {
     box-shadow: var(--card-shadow);
     display: flex;
     flex-direction: column;
-    height: 200px; /* Fixed height for consistency */
+    min-height: 180px; /* Minimum height */
+    height: auto; /* Auto height based on content */
 }
 
 .card:hover {
@@ -387,65 +414,67 @@ button.primary-action:disabled {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 6px 10px;
-    background-color: var(--gray-50);
+    padding: 8px 12px;
+    background-color: var(--primary-light);
     border-bottom: 1px solid var(--gray-200);
     font-size: 12px;
-    height: 30px;
-    min-height: 30px;
+    height: 34px;
+    min-height: 34px;
 }
 
 .card-deck {
     display: inline-block;
     font-size: 11px;
-    font-weight: 500;
-    color: var(--primary-color);
-    background-color: var(--primary-light);
-    padding: 1px 6px;
+    font-weight: 600;
+    color: var(--white);
+    background-color: var(--primary-color);
+    padding: 2px 8px;
     border-radius: 4px;
     line-height: 1.3;
 }
 
 .card-content {
     display: flex;
-    flex-direction: row;
-    flex-grow: 1;
-    min-height: 0;
-    overflow: hidden;
+    flex-direction: column;
+    height: auto;
+    overflow: visible;
 }
 
 .card-front, .card-back {
-    flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    padding: 8px;
+    overflow: visible;
+    padding: 12px;
 }
 
 .card-back {
-    border-left: 1px solid var(--gray-200);
+    border-top: 1px solid var(--gray-200);
 }
 
 .card-label {
     font-weight: 600;
-    font-size: 11px;
-    color: var(--gray-700);
-    margin-bottom: 4px;
+    font-size: 12px;
+    color: var(--primary-color);
+    margin-bottom: 6px;
     white-space: nowrap;
+    letter-spacing: 0.2px;
 }
 
 .card-text {
     width: 100%;
-    flex-grow: 1;
-    background-color: var(--white);
+    background-color: var(--gray-50);
     border: 1px solid var(--gray-200);
     border-radius: 4px;
-    padding: 8px;
-    line-height: 1.4;
+    padding: 10px;
+    line-height: 1.5;
     outline: none;
-    font-size: 13px;
-    overflow-y: auto;
+    font-size: 14px;
+    overflow: visible;
+    min-height: 40px;
+    height: auto;
+    word-wrap: break-word;
+    white-space: pre-wrap;
 }
 
 .card-text:focus {
@@ -455,15 +484,16 @@ button.primary-action:disabled {
 .card-actions {
     display: flex;
     justify-content: space-between;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-top: 1px solid var(--gray-200);
     background-color: var(--gray-50);
-    min-height: 34px;
+    min-height: 38px;
 }
 
 .card-actions button {
-    padding: 3px 8px;
-    font-size: 11px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 .delete-button {
@@ -480,8 +510,8 @@ button.primary-action:disabled {
 .questions-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
-    gap: 16px;
-    padding-bottom: 20px;
+    gap: 20px;
+    padding: 20px;
 }
 
 .question-item {
@@ -493,7 +523,8 @@ button.primary-action:disabled {
     box-shadow: var(--card-shadow);
     display: flex;
     flex-direction: column;
-    height: 140px; /* Shorter height since we're removing notes */
+    min-height: 100px;
+    height: auto; /* Auto height based on content */
 }
 
 .question-item:hover {
@@ -505,21 +536,21 @@ button.primary-action:disabled {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 6px 10px;
-    background-color: var(--gray-50);
+    padding: 8px 12px;
+    background-color: var(--primary-light);
     border-bottom: 1px solid var(--gray-200);
     font-size: 12px;
-    height: 30px;
-    min-height: 30px;
+    height: 34px;
+    min-height: 34px;
 }
 
 .question-topic {
     display: inline-block;
     font-size: 11px;
-    font-weight: 500;
-    color: var(--primary-color);
-    background-color: var(--primary-light);
-    padding: 1px 6px;
+    font-weight: 600;
+    color: var(--white);
+    background-color: var(--primary-color);
+    padding: 2px 8px;
     border-radius: 4px;
     line-height: 1.3;
 }
@@ -527,32 +558,34 @@ button.primary-action:disabled {
 .question-body {
     display: flex;
     flex-direction: column;
-    padding: 10px;
-    flex-grow: 1;
-    overflow: hidden;
+    padding: 12px;
+    overflow: visible;
 }
 
 .question-text {
     font-weight: 600;
     font-size: 14px;
-    line-height: 1.4;
+    line-height: 1.5;
     color: var(--text-color);
-    overflow-y: auto;
-    flex-grow: 1;
+    overflow: visible;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    padding: 5px 0;
 }
 
 .question-actions {
     display: flex;
     justify-content: flex-end;
-    padding: 4px 8px;
+    padding: 6px 10px;
     border-top: 1px solid var(--gray-200);
     background-color: var(--gray-50);
-    min-height: 34px;
+    min-height: 38px;
 }
 
 .question-actions button {
-    padding: 3px 8px;
-    font-size: 11px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 /* Text formatting within the input */
