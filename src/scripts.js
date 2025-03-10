@@ -560,7 +560,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const selectedText = state.selectedText;
         
         if (!selectedText) {
-            alert('Please select some text first.');
+            showNotification('Please select some text first.', 'error');
             return;
         }
         
@@ -575,8 +575,25 @@ document.addEventListener('DOMContentLoaded', () => {
             // Then highlight the selected text
             highlightSelection();
             
-            // Get questions from Claude API
-            const questions = await generateQuestionsWithClaude(selectedText);
+            // Get questions from Claude API with proper error handling
+            let questions;
+            try {
+                questions = await generateQuestionsWithClaude(selectedText);
+                
+                if (!questions || !Array.isArray(questions) || questions.length === 0) {
+                    throw new Error('No valid questions were generated.');
+                }
+                
+                // Check if we got an error response
+                if (questions.length === 1 && questions[0].topic === 'Error') {
+                    throw new Error(questions[0].question);
+                }
+                
+            } catch (apiError) {
+                console.error('API error generating questions:', apiError);
+                showNotification('Error from Claude API. Please try again with a different text selection.', 'error');
+                return;
+            }
             
             // Add generated questions to state
             state.questions = [...state.questions, ...questions];
@@ -590,9 +607,12 @@ document.addEventListener('DOMContentLoaded', () => {
             // Switch to questions tab
             switchToTab('questions-tab');
             
+            // Show success notification
+            showNotification(`${questions.length} questions generated successfully`, 'success');
+            
         } catch (error) {
-            console.error('Error generating questions:', error);
-            alert('Error generating questions: ' + (error.message || 'Please try again.'));
+            console.error('Error in question generation process:', error);
+            showNotification(error.message || 'Failed to generate questions. Please try again.', 'error');
         } finally {
             generateQuestionsButton.disabled = false;
             generateQuestionsButton.textContent = 'Generate Questions';

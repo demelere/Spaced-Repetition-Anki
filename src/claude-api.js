@@ -299,7 +299,7 @@ function parseClaudeResponse(responseData, defaultDeck) {
 
 /**
  * Parses Claude's response to extract structured question data
- * Similar to card parsing but for the questions format
+ * Enhanced with more robust JSON parsing and fallback mechanisms
  * 
  * @param {Object} responseData - The raw response from Claude
  * @returns {Array} - Array of question objects
@@ -323,73 +323,173 @@ function parseQuestionsResponse(responseData) {
     
     console.log('Raw text response from Claude (questions):', responseText);
     
-    // Try to parse as JSON
-    try {
-        // First, extract JSON if it's embedded in other text
-        // Look for anything that might be JSON array
-        const jsonMatch = responseText.match(/(\[\s*\{.*\}\s*\])/s);
-        const jsonText = jsonMatch ? jsonMatch[1] : responseText;
-        
-        // Parse the JSON
-        const parsedQuestions = JSON.parse(jsonText);
-        console.log('Successfully parsed JSON questions:', parsedQuestions);
-        
-        // Validate the parsed data is an array with the expected structure
-        if (Array.isArray(parsedQuestions) && parsedQuestions.length > 0) {
-            // Validate each question has required fields
-            const validQuestions = parsedQuestions.filter(q => {
-                return q.question && (q.topic || "General");
-            });
-            
-            // Normalize the questions
-            const normalizedQuestions = validQuestions.map(q => ({
-                question: q.question,
-                topic: q.topic || "General"
-            }));
-            
-            if (normalizedQuestions.length > 0) {
-                console.log('Returning valid JSON questions:', normalizedQuestions);
-                return normalizedQuestions;
-            }
-        }
-        console.warn('Parsed JSON did not contain valid questions');
-    } catch (error) {
-        console.warn('Failed to parse questions response as JSON:', error);
-        
-        // Try searching for JSON inside the text (sometimes Claude wraps JSON in backticks or other text)
-        try {
-            const jsonRegex = /```(?:json)?\s*(\[\s*\{[\s\S]*?\}\s*\])\s*```/;
-            const match = responseText.match(jsonRegex);
-            if (match && match[1]) {
-                const extractedJson = match[1];
-                const parsedQuestions = JSON.parse(extractedJson);
-                
-                if (Array.isArray(parsedQuestions) && parsedQuestions.length > 0) {
-                    const validQuestions = parsedQuestions.filter(q => {
-                        return q.question && (q.topic || "General");
-                    }).map(q => ({
-                        question: q.question,
-                        topic: q.topic || "General"
-                    }));
-                    
-                    if (validQuestions.length > 0) {
-                        console.log('Returning valid JSON questions (extracted from code block):', validQuestions);
-                        return validQuestions;
-                    }
-                }
-            }
-        } catch (innerError) {
-            console.warn('Failed to extract JSON from code blocks:', innerError);
-        }
+    // If we have no text at all, return a fallback immediately
+    if (!responseText || responseText.trim().length === 0) {
+        console.error('Empty response from Claude API for questions');
+        return [{
+            question: "No response generated. Please try again with different text.",
+            topic: "Error"
+        }];
     }
     
-    // Fallback: If JSON parsing fails, create a basic fallback question
+    // Try multiple approaches to extract JSON
+    
+    // Method 1: Direct JSON parsing if the entire response is valid JSON
+    try {
+        const parsedQuestions = JSON.parse(responseText);
+        if (isValidQuestionArray(parsedQuestions)) {
+            return normalizeQuestions(parsedQuestions);
+        }
+    } catch (error) {
+        console.warn('Response is not directly parseable as JSON:', error.message);
+    }
+    
+    // Method 2: Look for JSON array pattern in the text
+    try {
+        const jsonMatch = responseText.match(/(\[\s*\{\s*"question"[\s\S]*?\}\s*\])/s);
+        if (jsonMatch && jsonMatch[1]) {
+            try {
+                const parsedQuestions = JSON.parse(jsonMatch[1]);
+                if (isValidQuestionArray(parsedQuestions)) {
+                    return normalizeQuestions(parsedQuestions);
+                }
+            } catch (innerError) {
+                console.warn('Matched JSON-like text is not valid JSON:', innerError.message);
+            }
+        }
+    } catch (error) {
+        console.warn('Error during regex matching for JSON array:', error.message);
+    }
+    
+    // Method 3: Look for code blocks that might contain JSON
+    try {
+        const codeBlockMatches = responseText.matchAll(/```(?:json)?\s*([\s\S]*?)```/g);
+        for (const match of codeBlockMatches) {
+            try {
+                const extractedJson = match[1].trim();
+                const parsedQuestions = JSON.parse(extractedJson);
+                if (isValidQuestionArray(parsedQuestions)) {
+                    return normalizeQuestions(parsedQuestions);
+                }
+            } catch (jsonError) {
+                console.warn('Code block does not contain valid JSON:', jsonError.message);
+            }
+        }
+    } catch (error) {
+        console.warn('Error extracting JSON from code blocks:', error.message);
+    }
+    
+    // Method 4: Try to construct questions from the text if it contains question-like content
+    // This is a more aggressive fallback that tries to salvage something from the text
+    try {
+        // Look for lines that seem like questions (ending with ?)
+        const lines = responseText.split('\n');
+        const potentialQuestions = [];
+        
+        let currentQuestion = '';
+        let currentTopic = 'General';
+        
+        for (const line of lines) {
+            const trimmedLine = line.trim();
+            
+            // Skip empty lines
+            if (!trimmedLine) continue;
+            
+            // Look for "topic:" or "category:" labels
+            const topicMatch = trimmedLine.match(/^(topic|category):\s*(.*)/i);
+            if (topicMatch) {
+                currentTopic = topicMatch[2].trim();
+                continue;
+            }
+            
+            // If line has a question mark, treat it as a question
+            if (trimmedLine.includes('?')) {
+                // If we already have a current question, save it before starting a new one
+                if (currentQuestion) {
+                    potentialQuestions.push({
+                        question: currentQuestion,
+                        topic: currentTopic
+                    });
+                }
+                
+                currentQuestion = trimmedLine;
+                continue;
+            }
+            
+            // If line starts with a number followed by period, it might be a numbered list item
+            if (/^\d+\.\s/.test(trimmedLine)) {
+                const textAfterNumber = trimmedLine.replace(/^\d+\.\s/, '').trim();
+                
+                // If we already have a current question, save it before starting a new one
+                if (currentQuestion) {
+                    potentialQuestions.push({
+                        question: currentQuestion,
+                        topic: currentTopic
+                    });
+                }
+                
+                currentQuestion = textAfterNumber;
+                continue;
+            }
+            
+            // If it's not a new question, append to the current one
+            if (currentQuestion) {
+                currentQuestion += ' ' + trimmedLine;
+            } else {
+                // Start a new question if we don't have one
+                currentQuestion = trimmedLine;
+            }
+        }
+        
+        // Add the last question if there is one
+        if (currentQuestion) {
+            potentialQuestions.push({
+                question: currentQuestion,
+                topic: currentTopic
+            });
+        }
+        
+        // If we found any potential questions, return them
+        if (potentialQuestions.length > 0) {
+            console.log('Created questions by parsing text content:', potentialQuestions);
+            return potentialQuestions;
+        }
+    } catch (error) {
+        console.warn('Error during text-based question extraction:', error);
+    }
+    
+    // Final fallback: create a default question with a snippet of the response
     console.warn('Could not parse any questions from Claude response, using fallback');
     
     return [{
         question: "What are the key points from this text that would be interesting to discuss?",
         topic: "General"
+    }, {
+        question: "Based on the text, what follow-up questions could you ask?",
+        topic: "General"
     }];
+}
+
+// Helper functions for the enhanced parser
+function isValidQuestionArray(data) {
+    return Array.isArray(data) && data.length > 0 && 
+           data.some(q => q && typeof q === 'object' && q.question);
+}
+
+function normalizeQuestions(questions) {
+    // Validate each question has required fields and normalize the format
+    const normalized = questions.filter(q => q && q.question)
+        .map(q => ({
+            question: q.question,
+            topic: q.topic || "General"
+        }));
+    
+    if (normalized.length > 0) {
+        console.log('Returning normalized questions:', normalized);
+        return normalized;
+    }
+    
+    return null; // Signal to continue with other methods
 }
 
 export { 
