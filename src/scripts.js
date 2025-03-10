@@ -27,6 +27,10 @@ document.addEventListener('DOMContentLoaded', () => {
         anthropicApiKeyInput.value = storedKeys.anthropicApiKey;
         if (storedKeys.mochiApiKey) {
             mochiApiKeyInput.value = storedKeys.mochiApiKey;
+            // Fetch decks right away if we have a Mochi API key
+            fetchDecks()
+                .then(() => console.log('Loaded Mochi decks on startup'))
+                .catch(error => console.error('Failed to load Mochi decks on startup:', error));
         }
     } else {
         // Show API key modal on startup if no API keys are stored
@@ -37,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
     settingsButton.addEventListener('click', showApiKeyModal);
     
     // Save button in API key modal
-    apiKeySaveButton.addEventListener('click', () => {
+    apiKeySaveButton.addEventListener('click', async () => {
         const anthropicKey = anthropicApiKeyInput.value.trim();
         const mochiKey = mochiApiKeyInput.value.trim();
         const storeLocally = storeLocallyCheckbox.checked;
@@ -57,6 +61,17 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Update UI based on available keys
             updateUiForApiKeys();
+            
+            // Fetch decks if Mochi API key is provided
+            if (mochiKey) {
+                try {
+                    await fetchDecks();
+                    console.log('Successfully fetched Mochi decks with user key');
+                } catch (error) {
+                    console.error('Failed to fetch Mochi decks:', error);
+                    showNotification('Failed to connect to Mochi API', 'error');
+                }
+            }
             
             // Show success notification
             showNotification('API keys saved successfully', 'success');
@@ -1107,20 +1122,45 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        // Download the markdown file
-        const blob = new Blob([markdown], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `flashcards-${new Date().toISOString().slice(0, 10)}.md`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 0);
-        
-        showNotification(`${state.cards.length} cards exported as markdown`, 'success');
+        try {
+            // Download the markdown file
+            const blob = new Blob([markdown], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `flashcards-${new Date().toISOString().slice(0, 10)}.md`;
+            a.style.display = 'none'; // Hide the element
+            document.body.appendChild(a);
+            a.click();
+            
+            // Cleanup
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+            
+            showNotification(`${state.cards.length} cards exported as markdown`, 'success');
+        } catch (error) {
+            console.error('Error exporting markdown:', error);
+            
+            // Alternative method for environments where the download might be blocked
+            const textarea = document.createElement('textarea');
+            textarea.value = markdown;
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                showNotification('Export copied to clipboard instead (download failed)', 'warning');
+            } catch (clipboardError) {
+                console.error('Clipboard copy failed:', clipboardError);
+                showNotification('Export failed. Check console for markdown content', 'error');
+                console.log('MARKDOWN CONTENT:');
+                console.log(markdown);
+            }
+            
+            document.body.removeChild(textarea);
+        }
     }
     
     function exportQuestions() {
@@ -1136,20 +1176,45 @@ document.addEventListener('DOMContentLoaded', () => {
             questionsMarkdown += `- ${q.question}\n\n`;
         });
         
-        // Download as markdown
-        const blob = new Blob([questionsMarkdown], { type: 'text/markdown' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `interview-questions-${new Date().toISOString().slice(0, 10)}.md`;
-        document.body.appendChild(a);
-        a.click();
-        setTimeout(() => {
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }, 0);
-        
-        showNotification(`${state.questions.length} questions exported successfully`, 'success');
+        try {
+            // Download as markdown
+            const blob = new Blob([questionsMarkdown], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `interview-questions-${new Date().toISOString().slice(0, 10)}.md`;
+            a.style.display = 'none'; // Hide the element
+            document.body.appendChild(a);
+            a.click();
+            
+            // Cleanup
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+            
+            showNotification(`${state.questions.length} questions exported successfully`, 'success');
+        } catch (error) {
+            console.error('Error exporting questions:', error);
+            
+            // Alternative method for environments where the download might be blocked
+            const textarea = document.createElement('textarea');
+            textarea.value = questionsMarkdown;
+            document.body.appendChild(textarea);
+            textarea.select();
+            
+            try {
+                document.execCommand('copy');
+                showNotification('Questions copied to clipboard instead (download failed)', 'warning');
+            } catch (clipboardError) {
+                console.error('Clipboard copy failed:', clipboardError);
+                showNotification('Export failed. Check console for questions content', 'error');
+                console.log('QUESTIONS CONTENT:');
+                console.log(questionsMarkdown);
+            }
+            
+            document.body.removeChild(textarea);
+        }
     }
     
     function formatCardsForMochi() {
