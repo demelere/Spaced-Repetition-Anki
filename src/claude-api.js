@@ -98,15 +98,18 @@ Generate between 1-5 cards depending on the complexity and amount of content in 
  * Calls Claude API to generate flashcards from text
  * Uses server-side proxy with user-provided API key
  * 
- * @param {string} text - The text selection to create cards from
- * @param {string} defaultDeck - The default deck category to use if Claude doesn't specify one
+ * @param {string} text - The highlighted text selection to create cards from
  * @param {string} deckOptions - Comma-separated list of available deck options
+ * @param {string} fullText - Optional full text for context
  * @returns {Promise<Array>} - Array of card objects with front, back, and deck properties
  */
-async function generateCardsWithClaude(text, defaultDeck, deckOptions = '') {
+async function generateCardsWithClaude(text, deckOptions = '', fullText = '') {
     try {
         // Get stored API keys
         const { anthropicApiKey } = getStoredApiKeys();
+        
+        // Use the full text if provided, otherwise use the highlighted text for both
+        const contextText = fullText || document.getElementById('textInput').value || text;
         
         // Call the server endpoint, passing the API key in the request if available
         const response = await fetch('/api/generate-cards', {
@@ -116,7 +119,7 @@ async function generateCardsWithClaude(text, defaultDeck, deckOptions = '') {
             },
             body: JSON.stringify({
                 text,
-                defaultDeck,
+                fullText: contextText,
                 deckOptions,
                 userApiKey: anthropicApiKey || null // Send user's API key to the server
             })
@@ -131,7 +134,7 @@ async function generateCardsWithClaude(text, defaultDeck, deckOptions = '') {
         console.log('Raw response data:', data);
         
         // Parse Claude's response to extract cards
-        return parseClaudeResponse(data, defaultDeck);
+        return parseClaudeResponse(data);
     } catch (error) {
         console.error('Error calling API:', error);
         
@@ -148,13 +151,17 @@ async function generateCardsWithClaude(text, defaultDeck, deckOptions = '') {
  * Calls Claude API to generate interview questions from text
  * Uses server-side proxy with user-provided API key
  * 
- * @param {string} text - The text selection to create questions from
+ * @param {string} text - The highlighted text selection to create questions from
+ * @param {string} fullText - Optional full text for context
  * @returns {Promise<Array>} - Array of question objects with question, notes, and topic properties
  */
-async function generateQuestionsWithClaude(text) {
+async function generateQuestionsWithClaude(text, fullText = '') {
     try {
         // Get stored API keys
         const { anthropicApiKey } = getStoredApiKeys();
+        
+        // Use the full text if provided, otherwise use the highlighted text for both
+        const contextText = fullText || document.getElementById('textInput').value || text;
         
         // Call the server endpoint, passing the API key in the request if available
         const response = await fetch('/api/generate-questions', {
@@ -164,6 +171,7 @@ async function generateQuestionsWithClaude(text) {
             },
             body: JSON.stringify({
                 text,
+                fullText: contextText,
                 userApiKey: anthropicApiKey || null // Send user's API key to the server
             })
         });
@@ -197,10 +205,9 @@ async function generateQuestionsWithClaude(text) {
  * This function needs to be adapted based on how Claude formats its response
  * 
  * @param {string} responseText - The text response from Claude
- * @param {string} defaultDeck - Default deck to use if not specified
  * @returns {Array} - Array of card objects
  */
-function parseClaudeResponse(responseData, defaultDeck) {
+function parseClaudeResponse(responseData) {
     console.log('Claude response:', responseData);
     
     let responseText = '';
@@ -236,15 +243,14 @@ function parseClaudeResponse(responseData, defaultDeck) {
         if (Array.isArray(parsedCards) && parsedCards.length > 0) {
             // Validate each card has required fields
             const validCards = parsedCards.filter(card => {
-                return card.front && card.back && 
-                       (card.deck || defaultDeck);
+                return card.front && card.back;
             });
             
-            // Use default deck if needed
+            // Ensure all cards have a deck (default to "General" if missing)
             const normalizedCards = validCards.map(card => ({
                 front: card.front,
                 back: card.back,
-                deck: card.deck || defaultDeck
+                deck: card.deck || "General"
             }));
             
             if (normalizedCards.length > 0) {
@@ -266,12 +272,11 @@ function parseClaudeResponse(responseData, defaultDeck) {
                 
                 if (Array.isArray(parsedCards) && parsedCards.length > 0) {
                     const validCards = parsedCards.filter(card => {
-                        return card.front && card.back && 
-                               (card.deck || defaultDeck);
+                        return card.front && card.back;
                     }).map(card => ({
                         front: card.front,
                         back: card.back,
-                        deck: card.deck || defaultDeck
+                        deck: card.deck || "General"
                     }));
                     
                     if (validCards.length > 0) {
@@ -293,7 +298,7 @@ function parseClaudeResponse(responseData, defaultDeck) {
         back: responseText.length > 300 
             ? responseText.substring(0, 300) + "..." 
             : responseText,
-        deck: defaultDeck
+        deck: "General"
     }];
 }
 

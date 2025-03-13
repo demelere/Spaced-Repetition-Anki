@@ -508,6 +508,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function generateCardsFromSelection() {
         const selectedText = state.selectedText;
+        const fullText = textInput.value;
         
         if (!selectedText) {
             alert('Please select some text first.');
@@ -525,11 +526,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Then highlight the selected text
             highlightSelection();
             
-            // Get cards from Claude API using the current deck and available deck options
+            // Get cards from Claude API using available deck options
             const cards = await generateCardsWithClaude(
-                selectedText, 
-                state.currentDeck,
-                Object.keys(state.decks).join(', ')
+                selectedText,
+                Object.keys(state.decks).join(', '),
+                fullText
             );
             
             // Add generated cards to state
@@ -558,6 +559,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function generateQuestionsFromSelection() {
         const selectedText = state.selectedText;
+        const fullText = textInput.value;
         
         if (!selectedText) {
             showNotification('Please select some text first.', 'error');
@@ -578,7 +580,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Get questions from Claude API with proper error handling
             let questions;
             try {
-                questions = await generateQuestionsWithClaude(selectedText);
+                questions = await generateQuestionsWithClaude(selectedText, fullText);
                 
                 if (!questions || !Array.isArray(questions) || questions.length === 0) {
                     throw new Error('No valid questions were generated.');

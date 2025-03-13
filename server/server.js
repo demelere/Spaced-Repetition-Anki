@@ -45,7 +45,7 @@ app.use((req, res, next) => {
 // API endpoint for Claude to generate cards
 app.post('/api/generate-cards', async (req, res) => {
   try {
-    const { text, defaultDeck, userApiKey } = req.body;
+    const { text, fullText, deckOptions, userApiKey } = req.body;
     
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
@@ -59,7 +59,7 @@ app.post('/api/generate-cards', async (req, res) => {
     
     // Claude system prompt
     const systemPrompt = `You are an expert in creating high-quality spaced repetition flashcards. 
-    Your task is to generate effective flashcards from the provided text excerpt.
+    Your task is to generate effective flashcards from the highlighted text excerpt, with the full text provided for context.
     
     Guidelines for creating excellent flashcards:
     1. Focus on core concepts and relationships rather than trivia or isolated facts
@@ -72,11 +72,14 @@ app.post('/api/generate-cards', async (req, res) => {
     8. Create cards that build conceptual understanding and connections
     9. Focus on "why" and "how" questions that develop deeper understanding
     10. Promote connections between concepts across domains when relevant
+    11. Whenever you're describing the author's viewpoint or prediction (and not just raw facts), feel free to cite them (or the resource itself) in the question 
     
     You will also analyze the content and suggest an appropriate deck category.
     The specific deck options will be dynamically determined and provided in the user message.
     
-    IMPORTANT - You must output your response as a valid JSON array of card objects. Each card object must have the following structure:
+    CRITICAL: You MUST ALWAYS output your response as a valid JSON array of card objects. NEVER provide any prose, explanation or markdown formatting.
+    
+    Each card object must have the following structure:
     
     {
       "front": "The question or prompt text goes here",
@@ -99,8 +102,8 @@ app.post('/api/generate-cards', async (req, res) => {
       }
     ]
     
-    Generate between 1-5 cards depending on the complexity and amount of content in the text.
-    Your response must be ONLY valid JSON - no introduction, no explanation, no markdown formatting.`;
+    Generate between 1-5 cards depending on the complexity and amount of content in the highlighted text.
+    Your response MUST BE ONLY valid JSON - no introduction, no explanation, no markdown formatting.`;
     
     // Call Claude API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -116,16 +119,18 @@ app.post('/api/generate-cards', async (req, res) => {
         messages: [
           {
             role: 'user',
-            content: `Please create spaced repetition flashcards from the following text excerpt.
+            content: `Please create spaced repetition flashcards from the following highlighted text excerpt.
             Use the guidelines from the system prompt.
             
-            Available deck categories: ${req.body.deckOptions || Object.keys(req.body.deckMap || {}).join(', ') || defaultDeck}
-            Default deck category: ${defaultDeck}
+            Available deck categories: ${deckOptions || Object.keys(req.body.deckMap || {}).join(', ') || "General"}
             
             Remember to return ONLY a valid JSON array of flashcard objects matching the required format.
             
-            Text excerpt:
-            ${text}`
+            Highlighted text (use this to create cards):
+            ${text}
+            
+            Full text context (for reference only):
+            ${fullText || text}`
           }
         ],
         max_tokens: 4000
@@ -158,7 +163,7 @@ app.post('/api/generate-cards', async (req, res) => {
 // API endpoint for generating interview questions
 app.post('/api/generate-questions', async (req, res) => {
   try {
-    const { text, userApiKey } = req.body;
+    const { text, fullText, userApiKey } = req.body;
     
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
@@ -170,20 +175,24 @@ app.post('/api/generate-questions', async (req, res) => {
       return res.status(500).json({ error: 'API key not configured. Please provide a Claude API key.' });
     }
     
-    // Claude system prompt for generating podcast interview questions
-    const systemPrompt = `You are an expert research assistant for the host of a podcast, helping prepare insightful interview questions based on text excerpts.
+    // Claude system prompt for generating podcast interview questions in Tyler Cowen's style
+    const systemPrompt = `You are Tyler Cowen, the brilliant economist and host of "Conversations with Tyler," preparing to interview an expert based on a text excerpt they've written. You're known for your wide-ranging intellect, unexpected connections, and ability to ask questions that reveal new ideas rather than simply rehashing what's already been said.
 
-    Guidelines for creating excellent interview questions:
-    1. Focus on thought-provoking, open-ended questions that can't be answered with a simple yes/no
-    2. Address key concepts, relationships, and implications from the text
-    3. Create questions that explore the "why" and "how" behind ideas, not just "what"
-    4. Identify potential disagreements or controversial aspects that would make for interesting discussion
-    5. Formulate questions that connect ideas from the text to broader contexts or implications
-    6. Ensure questions are specific enough to be meaningful but open enough to allow for expansive answers
-    7. Prioritize questions that will help the audience understand complex or novel ideas
-    8. Make sure questions are clear, concise, and directly usable without additional context
+    Guidelines for creating Tyler Cowen-style interview questions:
+    1. Go beyond the text - don't ask questions that are directly answered in the text
+    2. Make unexpected connections to other fields, disciplines, and thinkers
+    3. Identify potential contradictions or tensions in the author's thinking that would yield interesting responses
+    4. Generate questions that draw on your encyclopedic knowledge of economics, history, literature, and culture
+    5. Ask about implications the author may not have considered
+    6. Pose "thought experiments" that push the author's ideas into new territory
+    7. Inquire about contrarian takes that challenge the author's assumptions
+    8. Reference adjacent thinkers or competing ideas for comparative discussion
+    9. Ask about methodology, empirical evidence, or how the author would respond to specific counterexamples
+    10. Demonstrate deep background knowledge of the topic that would surprise the author
     
-    IMPORTANT - You must output your response as a valid JSON array of question objects. Each question object must have the following structure:
+    CRITICAL: You MUST ALWAYS output your response as a valid JSON array of question objects. NEVER provide any prose, explanation or markdown formatting.
+    
+    Each question object must have the following structure:
     
     {
       "question": "The complete interview question goes here. Make it standalone without requiring additional context.",
@@ -194,17 +203,21 @@ app.post('/api/generate-questions', async (req, res) => {
     
     [
       {
-        "question": "You've written that quantum computing represents a fundamental shift in information processing. Can you explain why traditional computing approaches might be insufficient for the problems quantum computing aims to solve?",
-        "topic": "Quantum Computing"
+        "question": "If we apply Coasean bargaining to your framework of distributed cognition, doesn't that undermine your conclusion about the need for centralized coordination? What would Ronald Coase say about your approach?",
+        "topic": "Economic Theory"
       },
       {
-        "question": "In your analysis of large language models, you suggest there's a tension between capabilities and alignment. How do you think this tension might be resolved as models continue to advance?",
-        "topic": "AI Safety"
+        "question": "You seem to implicitly adopt a Hayekian view of distributed knowledge, yet your policy recommendations lean toward centralization. How do you reconcile these seemingly contrary positions?",
+        "topic": "Policy Tensions"
+      },
+      {
+        "question": "The late David Graeber might argue your framework reinforces existing power structures. How would you respond to anthropological critiques that view your model as maintaining rather than challenging institutional hierarchies?",
+        "topic": "Power Dynamics"
       }
     ]
     
-    Generate between 3-8 questions depending on the complexity and amount of content in the text.
-    Your response must be ONLY valid JSON - no introduction, no explanation, no markdown formatting.`;
+    Generate between 3-8 questions depending on the complexity of the highlighted text. Demonstrate broad knowledge that extends far beyond what's in the text itself.
+    Your response MUST BE ONLY valid JSON - no introduction, no explanation, no markdown formatting.`;
     
     // Call Claude API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -220,13 +233,16 @@ app.post('/api/generate-questions', async (req, res) => {
         messages: [
           {
             role: 'user',
-            content: `Please create podcast interview questions based on the following text excerpt.
+            content: `Please create podcast interview questions based on the following highlighted text excerpt.
             Use the guidelines from the system prompt.
             
             Remember to return ONLY a valid JSON array of question objects matching the required format.
             
-            Text excerpt:
-            ${text}`
+            Highlighted text (use this to create questions):
+            ${text}
+            
+            Full text context (for reference only):
+            ${fullText || text}`
           }
         ],
         max_tokens: 4000
