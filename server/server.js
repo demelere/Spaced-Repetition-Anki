@@ -11,6 +11,94 @@ const cors = require('cors');
 const path = require('path');
 const fetch = require('node-fetch');
 
+// Helper function to determine if texts are effectively the same, ignoring whitespace differences
+function areTextsEffectivelyEqual(text1, text2) {
+  if (!text1 || !text2) return false;
+  
+  // Normalize both texts by:
+  // 1. Trimming whitespace from ends
+  // 2. Converting to lowercase
+  // 3. Removing extra whitespace (multiple spaces, tabs, newlines)
+  // 4. Removing punctuation if needed
+  const normalize = (str) => {
+    return str
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  };
+  
+  const normalized1 = normalize(text1);
+  const normalized2 = normalize(text2);
+  
+  // Check if one is a subset of the other (allowing for small differences)
+  const minLength = Math.min(normalized1.length, normalized2.length);
+  const maxLength = Math.max(normalized1.length, normalized2.length);
+  
+  // If one text is less than 90% of the other's length, they're likely different
+  if (minLength / maxLength < 0.9) {
+    return false;
+  }
+  
+  // Direct equality check after normalization
+  if (normalized1 === normalized2) {
+    console.log("Texts are effectively equal");
+    return true;
+  }
+  
+  // For longer texts, consider them equal if they're at least 95% similar
+  if (minLength > 1000) {
+    // Rough similarity check - if one is the full text and another is highlighted
+    // they should match except for a small portion
+    const longer = normalized1.length > normalized2.length ? normalized1 : normalized2;
+    const shorter = normalized1.length > normalized2.length ? normalized2 : normalized1;
+    
+    return longer.includes(shorter) || 
+           (levenshteinDistance(normalized1, normalized2) / maxLength) < 0.05;
+  }
+  
+  return false;
+}
+
+// Levenshtein distance calculation for text similarity
+function levenshteinDistance(str1, str2) {
+  // For very long strings, only check a sample to avoid performance issues
+  if (str1.length > 5000 || str2.length > 5000) {
+    // Sample first 1000 chars
+    return levenshteinDistance(str1.substring(0, 1000), str2.substring(0, 1000));
+  }
+  
+  const m = str1.length;
+  const n = str2.length;
+  
+  // Skip expensive calculation if length difference is too great
+  if (Math.abs(m - n) > Math.min(m, n) * 0.5) {
+    return Math.max(m, n);
+  }
+  
+  let dp = Array(n + 1).fill().map(() => Array(m + 1).fill(0));
+  
+  for (let i = 0; i <= m; i++) {
+    dp[0][i] = i;
+  }
+  
+  for (let j = 0; j <= n; j++) {
+    dp[j][0] = j;
+  }
+  
+  for (let j = 1; j <= n; j++) {
+    for (let i = 1; i <= m; i++) {
+      const cost = str1[i - 1] === str2[j - 1] ? 0 : 1;
+      dp[j][i] = Math.min(
+        dp[j][i - 1] + 1,        // deletion
+        dp[j - 1][i] + 1,        // insertion 
+        dp[j - 1][i - 1] + cost  // substitution
+      );
+    }
+  }
+  
+  return dp[n][m];
+}
+
 // Log available environment variables for debugging (without exposing values)
 console.log('Environment variables available:', Object.keys(process.env).filter(key => 
   key.includes('API_KEY') || key.includes('TOKEN')
@@ -119,18 +207,23 @@ app.post('/api/generate-cards', async (req, res) => {
         messages: [
           {
             role: 'user',
-            content: `Please create spaced repetition flashcards from the following highlighted text excerpt.
+            content: `Please create spaced repetition flashcards from the following text.
             Use the guidelines from the system prompt.
             
             Available deck categories: ${deckOptions || Object.keys(req.body.deckMap || {}).join(', ') || "General"}
             
             Remember to return ONLY a valid JSON array of flashcard objects matching the required format.
             
-            Highlighted text (use this to create cards):
-            ${text}
-            
-            Full text context (for reference only):
-            ${fullText || text}`
+            ${areTextsEffectivelyEqual(text, fullText || text) ? 
+              `Text to create cards from:
+              ${text}` 
+              : 
+              `Highlighted text (use this to create cards):
+              ${text}
+              
+              Full text context (for reference only):
+              ${fullText || text}`
+            }`
           }
         ],
         max_tokens: 4000
@@ -233,16 +326,21 @@ app.post('/api/generate-questions', async (req, res) => {
         messages: [
           {
             role: 'user',
-            content: `Please create podcast interview questions based on the following highlighted text excerpt.
+            content: `Please create podcast interview questions based on the following text.
             Use the guidelines from the system prompt.
             
             Remember to return ONLY a valid JSON array of question objects matching the required format.
             
-            Highlighted text (use this to create questions):
-            ${text}
-            
-            Full text context (for reference only):
-            ${fullText || text}`
+            ${areTextsEffectivelyEqual(text, fullText || text) ? 
+              `Text to create questions from:
+              ${text}` 
+              : 
+              `Highlighted text (use this to create questions):
+              ${text}
+              
+              Full text context (for reference only):
+              ${fullText || text}`
+            }`
           }
         ],
         max_tokens: 4000
