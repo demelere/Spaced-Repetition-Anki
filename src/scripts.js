@@ -508,7 +508,10 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function generateCardsFromSelection() {
         const selectedText = state.selectedText;
-        const fullText = textInput.value;
+        // Use textContent instead of value for contenteditable elements
+        const fullText = textInput.textContent || '';
+        console.log("Selected text:", selectedText);
+        console.log("Full text:", fullText);
         
         if (!selectedText) {
             alert('Please select some text first.');
@@ -559,7 +562,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function generateQuestionsFromSelection() {
         const selectedText = state.selectedText;
-        const fullText = textInput.value;
+        // Use textContent instead of value for contenteditable elements
+        const fullText = textInput.textContent || '';
         
         if (!selectedText) {
             showNotification('Please select some text first.', 'error');

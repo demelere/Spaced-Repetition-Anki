@@ -108,8 +108,8 @@ async function generateCardsWithClaude(text, deckOptions = '', fullText = '') {
         // Get stored API keys
         const { anthropicApiKey } = getStoredApiKeys();
         
-        // Use the full text if provided, otherwise use the highlighted text for both
-        const contextText = fullText || document.getElementById('textInput').value || text;
+        // Use the provided fullText for context, or fallback to the text input's full content
+        const contextText = fullText;
         
         // Call the server endpoint, passing the API key in the request if available
         const response = await fetch('/api/generate-cards', {
