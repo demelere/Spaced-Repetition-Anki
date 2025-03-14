@@ -2,6 +2,7 @@
 import { 
     generateCardsWithClaude, 
     generateQuestionsWithClaude,
+    analyzeTextWithClaude,
     getStoredApiKeys,
     storeApiKeys,
     clearStoredApiKeys,
@@ -149,7 +150,10 @@ document.addEventListener('DOMContentLoaded', () => {
         questions: [],
         selectedText: '',
         currentDeck: null,
-        decks: {}
+        decks: {},
+        documentContext: '',
+        isAnalyzing: false,
+        fromPaste: false
     };
     
     // Fetch decks from Mochi API
@@ -356,6 +360,23 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add plain text paste handlers
     textInput.addEventListener('paste', handlePaste);
     
+    // Monitor text changes to automatically analyze document
+    let textChangeTimeout = null;
+    textInput.addEventListener('input', () => {
+        // Clear any existing timeout
+        if (textChangeTimeout) {
+            clearTimeout(textChangeTimeout);
+        }
+        
+        // Set a new timeout to analyze text after typing stops (1.5 second delay)
+        textChangeTimeout = setTimeout(() => {
+            const fullText = textInput.textContent || '';
+            if (fullText.trim().length > 100 && !state.isAnalyzing) {
+                analyzeDocumentContext(fullText);
+            }
+        }, 1500);
+    });
+    
     // Monitor text selection
     textInput.addEventListener('mouseup', handleTextSelection);
     textInput.addEventListener('keyup', handleTextSelection);
@@ -449,7 +470,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: false });
     
     // Functions
-    function handlePaste(e) {
+    async function handlePaste(e) {
         // Prevent the default paste behavior
         e.preventDefault();
         
@@ -466,6 +487,63 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Update the UI after a short delay
             setTimeout(handleTextSelection, 50);
+            
+            // If text is long enough, analyze it immediately 
+            if (text.length > 100) {
+                state.fromPaste = true;
+                await analyzeDocumentContext(text);
+            }
+        }
+    }
+    
+    // Analyze text to extract context summary when text is pasted
+    async function analyzeDocumentContext(text) {
+        if (!text || text.trim().length < 100 || state.isAnalyzing) {
+            return; // Skip short texts or if already analyzing
+        }
+        
+        try {
+            // Set analyzing state flag
+            state.isAnalyzing = true;
+            
+            // Update button states to show analyzing
+            updateButtonStatesForAnalysis(true);
+            
+            // Show subtle loading indicator
+            const statusElement = document.getElementById('selectionStatus');
+            const originalStatus = statusElement.textContent;
+            statusElement.textContent = 'Understanding document...';
+            
+            // Call Claude API to get document context
+            const contextSummary = await analyzeTextWithClaude(text);
+            
+            if (!contextSummary) {
+                throw new Error('No context summary returned');
+            }
+            
+            // Store in state for later use
+            state.documentContext = contextSummary;
+            
+            // Show a visual indicator that context is available
+            document.body.classList.add('has-document-context');
+            
+            // Restore original status or show completion
+            statusElement.textContent = originalStatus;
+            // Only show notification if it's a paste (not from automatic analysis)
+            if (state.fromPaste) {
+                showNotification('Document understood', 'success', 1500);
+                state.fromPaste = false;
+            }
+            
+        } catch (error) {
+            console.error('Error analyzing document:', error);
+            // Show error notification
+            showNotification('Could not fully understand document', 'error', 2000);
+        } finally {
+            // Reset analyzing state
+            state.isAnalyzing = false;
+            // Update button states
+            updateButtonStatesForAnalysis(false);
         }
     }
     
@@ -508,10 +586,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function generateCardsFromSelection() {
         const selectedText = state.selectedText;
-        // Use textContent instead of value for contenteditable elements
-        const fullText = textInput.textContent || '';
         console.log("Selected text:", selectedText);
-        console.log("Full text:", fullText);
+        console.log("Document context:", state.documentContext ? state.documentContext.substring(0, 50) + '...' : 'None');
         
         if (!selectedText) {
             alert('Please select some text first.');
@@ -529,11 +605,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Then highlight the selected text
             highlightSelection();
             
-            // Get cards from Claude API using available deck options
+            // Get cards from Claude API using available deck options and document context
             const cards = await generateCardsWithClaude(
                 selectedText,
                 Object.keys(state.decks).join(', '),
-                fullText
+                state.documentContext
             );
             
             // Add generated cards to state
@@ -550,7 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (error) {
             console.error('Error generating cards:', error);
-            alert('Error generating cards: ' + (error.message || 'Please try again.'));
+            showNotification('Error generating cards: ' + (error.message || 'Please try again.'), 'error');
         } finally {
             generateButton.disabled = false;
             generateButton.textContent = 'Generate Cards';
@@ -562,8 +638,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function generateQuestionsFromSelection() {
         const selectedText = state.selectedText;
-        // Use textContent instead of value for contenteditable elements
-        const fullText = textInput.textContent || '';
         
         if (!selectedText) {
             showNotification('Please select some text first.', 'error');
@@ -584,7 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Get questions from Claude API with proper error handling
             let questions;
             try {
-                questions = await generateQuestionsWithClaude(selectedText, fullText);
+                questions = await generateQuestionsWithClaude(selectedText, state.documentContext);
                 
                 if (!questions || !Array.isArray(questions) || questions.length === 0) {
                     throw new Error('No valid questions were generated.');
@@ -949,6 +1023,97 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasQuestions = state.questions.length > 0;
         exportQuestionsButton.disabled = !hasQuestions;
         clearQuestionsButton.disabled = !hasQuestions;
+    }
+    
+    function updateButtonStatesForAnalysis(isAnalyzing) {
+        // Create overlays if they don't exist
+        const analysisStatus = document.getElementById('analysisOverlay');
+        if (!analysisStatus) {
+            createAnalysisOverlay();
+        }
+        
+        // Get the elements (now they must exist)
+        const status = document.getElementById('analysisOverlay');
+        const generateButtonOverlay = generateButton.parentElement.querySelector('.button-overlay');
+        const questionsButtonOverlay = generateQuestionsButton.parentElement.querySelector('.button-overlay');
+        
+        if (isAnalyzing) {
+            // Show analyzing status and disable buttons
+            status.classList.add('active');
+            
+            // Disable buttons and show overlays
+            generateButton.disabled = true;
+            generateQuestionsButton.disabled = true;
+            
+            // Show button overlays
+            generateButtonOverlay.classList.add('active');
+            questionsButtonOverlay.classList.add('active');
+        } else {
+            // Hide analyzing status
+            status.classList.remove('active');
+            
+            // Only enable generate buttons if there's selected text
+            const hasSelection = state.selectedText.length > 0;
+            generateButton.disabled = !hasSelection;
+            generateQuestionsButton.disabled = !hasSelection;
+            
+            // Hide button overlays
+            generateButtonOverlay.classList.remove('active');
+            questionsButtonOverlay.classList.remove('active');
+        }
+    }
+    
+    function createAnalysisOverlay() {
+        // Create the analysis status indicator
+        const status = document.createElement('div');
+        status.id = 'analysisOverlay'; // Keep same ID for existing code
+        status.className = 'analysis-status';
+        
+        // Create spinner
+        const spinner = document.createElement('span');
+        spinner.className = 'analysis-spinner';
+        
+        // Add text
+        const text = document.createElement('span');
+        text.textContent = 'Understanding document...';
+        
+        // Assemble elements
+        status.appendChild(spinner);
+        status.appendChild(text);
+        
+        // Add to editor panel
+        const editorPanel = document.querySelector('.editor-panel');
+        editorPanel.style.position = 'relative';
+        editorPanel.appendChild(status);
+        
+        // Add button overlays
+        // Wrap both generate buttons in containers
+        setupButtonOverlay(generateButton);
+        setupButtonOverlay(generateQuestionsButton);
+    }
+    
+    function setupButtonOverlay(button) {
+        // Create a container for the button if it's not already in one
+        if (!button.parentElement.classList.contains('button-container')) {
+            const container = document.createElement('div');
+            container.className = 'button-container';
+            
+            // Replace the button with the container
+            button.parentNode.insertBefore(container, button);
+            container.appendChild(button);
+            
+            // Add the overlay
+            const overlay = document.createElement('div');
+            overlay.className = 'button-overlay';
+            
+            // Create spinner
+            const spinner = document.createElement('span');
+            spinner.className = 'analysis-spinner';
+            overlay.appendChild(spinner);
+            
+            // Add the overlay to the container
+            container.appendChild(overlay);
+        }
     }
     
     function clearAllCards() {

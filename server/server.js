@@ -11,69 +11,12 @@ const cors = require('cors');
 const path = require('path');
 const fetch = require('node-fetch');
 
-// Helper function to determine if highlighted text equals the full text
-// Purpose: Returns true ONLY if the texts are effectively the same document
-//          Returns false if one is a highlighted portion of the other
-function areTextsEffectivelyEqual(text1, text2) {
-  // Handle edge cases
-  if (!text1 || !text2) return false;
-  
-  // Simple exact match test - return immediately if texts are identical
-  if (text1 === text2) return true;
-  
-  // Normalize both texts (trim whitespace, normalize line breaks, etc.)
-  const normalize = str => {
-    return str
-      .trim()                     // Remove leading/trailing whitespace
-      .replace(/\s+/g, ' ')       // Replace consecutive whitespace with a single space
-      .replace(/\r\n|\r|\n/g, ' ') // Normalize all line breaks to spaces
-      .toLowerCase();             // Case-insensitive comparison
-  };
-  
-  const normalized1 = normalize(text1);
-  const normalized2 = normalize(text2);
-  
-  // Check if they're exact matches after normalization
-  if (normalized1 === normalized2) return true;
-  
-  // Detect if one text is a subset of the other - for handling partial selections
-  if (normalized1.length !== normalized2.length) {
-    // If lengths are significantly different, they can't be the same document
-    const lengthRatio = Math.min(normalized1.length, normalized2.length) / 
-                       Math.max(normalized1.length, normalized2.length);
-    
-    // If one text is at least 95% the length of the other, they could be effectively the same
-    // with just minor differences in whitespace, line breaks, etc.
-    if (lengthRatio > 0.95) {
-      // Check for similarity
-      const longer = normalized1.length > normalized2.length ? normalized1 : normalized2;
-      const shorter = normalized1.length > normalized2.length ? normalized2 : normalized1;
-
-      // If the shorter text is fully contained in the longer one, they're the same document
-      return longer.includes(shorter);
-    }
-    return false;
-  }
-  
-  // If not an exact match but very close in length, do a similarity check
-  if (Math.abs(normalized1.length - normalized2.length) < 5) {
-    // Count differing characters
-    let differences = 0;
-    for (let i = 0; i < normalized1.length; i++) {
-      if (normalized1[i] !== normalized2[i]) differences++;
-    }
-    
-    // If less than 1% different, consider them the same
-    return differences < normalized1.length * 0.01;
-  }
-  
-  return false;
+// Helper function to truncate text to a reasonable size to reduce payload
+function truncateText(text, maxLength = 8000) {
+  if (!text || text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '... [truncated]';
 }
 
-// Log available environment variables for debugging (without exposing values)
-console.log('Environment variables available:', Object.keys(process.env).filter(key => 
-  key.includes('API_KEY') || key.includes('TOKEN')
-).map(key => `${key}: ${key.includes('KEY') ? '****' : 'configured'}`));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -89,7 +32,8 @@ app.use(cors({
   ],
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../src')));
 
 // Add middleware to expose environment variables to client
@@ -102,9 +46,73 @@ app.use((req, res, next) => {
 });
 
 // API endpoint for Claude to generate cards
+// API endpoint for initial text analysis
+app.post('/api/analyze-text', async (req, res) => {
+  try {
+    const { text, userApiKey } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+    
+    // Use user-provided API key if available, otherwise fall back to environment variable
+    const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      return res.status(500).json({ error: 'API key not configured. Please provide a Claude API key.' });
+    }
+    
+    // Truncate text if extremely long
+    const truncatedText = truncateText(text, 10000);
+    
+    // Create the request payload
+    const analyzePayload = {
+      model: 'claude-3-7-sonnet-20250219',
+      system: 'You analyze text to extract key contextual information. Create a concise 1-2 paragraph summary that includes: the author/source if identifiable, the main thesis or argument, key points, and relevant background. This summary will serve as context for future interactions with sections of this text.',
+      messages: [
+        {
+          role: 'user',
+          content: `Please analyze this text and provide a concise contextual summary (1-2 paragraphs maximum):
+
+${truncatedText}`
+        }
+      ],
+      max_tokens: 1000
+    };
+    
+    // Print the EXACT string that Anthropic will see
+    console.log('\n===== EXACT ANTHROPIC ANALYSIS PROMPT =====');
+    console.log('SYSTEM PROMPT:', analyzePayload.system);
+    console.log('\nUSER PROMPT:', analyzePayload.messages[0].content);
+    console.log('============================================\n');
+    
+    // Call Claude API
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify(analyzePayload)
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(`Claude API Error: ${errorData.error?.message || 'Unknown error'}`);
+    }
+    
+    const claudeResponse = await response.json();
+    res.json(claudeResponse);
+    
+  } catch (error) {
+    console.error('Server error during text analysis:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.post('/api/generate-cards', async (req, res) => {
   try {
-    const { text, fullText, deckOptions, userApiKey } = req.body;
+    const { text, textContext, deckOptions, userApiKey } = req.body;
     
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
@@ -164,6 +172,36 @@ app.post('/api/generate-cards', async (req, res) => {
     Generate between 1-5 cards depending on the complexity and amount of content in the highlighted text.
     Your response MUST BE ONLY valid JSON - no introduction, no explanation, no markdown formatting.`;
     
+    // Create the request payload
+    const cardsPayload = {
+      model: 'claude-3-7-sonnet-20250219',
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: `Please create spaced repetition flashcards from the SELECTED TEXT below.
+Use the guidelines from the system prompt.
+
+Available deck categories: ${deckOptions || Object.keys(req.body.deckMap || {}).join(', ') || "General"}
+
+Remember to return ONLY a valid JSON array of flashcard objects matching the required format.
+
+PRIMARY FOCUS - Selected Text (create cards from this):
+${truncateText(text)}
+
+${textContext ? `OPTIONAL BACKGROUND - Document Context (use only if helpful for understanding the selected text):
+${textContext}` : ''}`
+        }
+      ],
+      max_tokens: 4000
+    };
+    
+    // Print the EXACT string that Anthropic will see
+    console.log('\n===== EXACT ANTHROPIC PROMPT =====');
+    console.log('SYSTEM PROMPT:', systemPrompt);
+    console.log('\nUSER PROMPT:', cardsPayload.messages[0].content);
+    console.log('==================================\n');
+    
     // Call Claude API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -172,33 +210,7 @@ app.post('/api/generate-cards', async (req, res) => {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({
-        model: 'claude-3-7-sonnet-20250219', // Updated to the latest model
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: `Please create spaced repetition flashcards from the following text.
-            Use the guidelines from the system prompt.
-            
-            Available deck categories: ${deckOptions || Object.keys(req.body.deckMap || {}).join(', ') || "General"}
-            
-            Remember to return ONLY a valid JSON array of flashcard objects matching the required format.
-            
-            ${areTextsEffectivelyEqual(text, fullText || text) ? 
-              `Text to create cards from:
-              ${text}` 
-              : 
-              `Highlighted text (use this to create cards):
-              ${text}
-              
-              Full text context (for reference only):
-              ${fullText || text}`
-            }`
-          }
-        ],
-        max_tokens: 4000
-      })
+      body: JSON.stringify(cardsPayload)
     });
     
     if (!response.ok) {
@@ -227,7 +239,7 @@ app.post('/api/generate-cards', async (req, res) => {
 // API endpoint for generating interview questions
 app.post('/api/generate-questions', async (req, res) => {
   try {
-    const { text, fullText, userApiKey } = req.body;
+    const { text, textContext, userApiKey } = req.body;
     
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
@@ -283,6 +295,34 @@ app.post('/api/generate-questions', async (req, res) => {
     Generate between 3-8 questions depending on the complexity of the highlighted text. Demonstrate broad knowledge that extends far beyond what's in the text itself.
     Your response MUST BE ONLY valid JSON - no introduction, no explanation, no markdown formatting.`;
     
+    // Create the request payload
+    const questionsPayload = {
+      model: 'claude-3-7-sonnet-20250219',
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: `Please create podcast interview questions based on the SELECTED TEXT below.
+Use the guidelines from the system prompt.
+
+Remember to return ONLY a valid JSON array of question objects matching the required format.
+
+PRIMARY FOCUS - Selected Text (create questions from this):
+${truncateText(text)}
+
+${textContext ? `OPTIONAL BACKGROUND - Document Context (use only if helpful for understanding the selected text):
+${textContext}` : ''}`
+        }
+      ],
+      max_tokens: 4000
+    };
+    
+    // Print the EXACT string that Anthropic will see
+    console.log('\n===== EXACT ANTHROPIC QUESTION PROMPT =====');
+    console.log('SYSTEM PROMPT:', systemPrompt);
+    console.log('\nUSER PROMPT:', questionsPayload.messages[0].content);
+    console.log('============================================\n');
+    
     // Call Claude API
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -291,31 +331,7 @@ app.post('/api/generate-questions', async (req, res) => {
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
-      body: JSON.stringify({
-        model: 'claude-3-7-sonnet-20250219',
-        system: systemPrompt,
-        messages: [
-          {
-            role: 'user',
-            content: `Please create podcast interview questions based on the following text.
-            Use the guidelines from the system prompt.
-            
-            Remember to return ONLY a valid JSON array of question objects matching the required format.
-            
-            ${areTextsEffectivelyEqual(text, fullText || text) ? 
-              `Text to create questions from:
-              ${text}` 
-              : 
-              `Highlighted text (use this to create questions):
-              ${text}
-              
-              Full text context (for reference only):
-              ${fullText || text}`
-            }`
-          }
-        ],
-        max_tokens: 4000
-      })
+      body: JSON.stringify(questionsPayload)
     });
     
     if (!response.ok) {

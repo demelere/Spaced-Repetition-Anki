@@ -95,21 +95,66 @@ For each card you generate, provide:
 Generate between 1-5 cards depending on the complexity and amount of content in the text.`;
 
 /**
+ * Analyzes text to extract key context information
+ * Returns a concise summary of the document's main points and author
+ * 
+ * @param {string} text - The full text to analyze
+ * @returns {Promise<string>} - Context summary
+ */
+async function analyzeTextWithClaude(text) {
+    try {
+        // Get stored API keys
+        const { anthropicApiKey } = getStoredApiKeys();
+        
+        // Call the server endpoint for text analysis
+        const response = await fetch('/api/analyze-text', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                text,
+                userApiKey: anthropicApiKey || null
+            })
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`API Error: ${errorData.error || 'Unknown error'}`);
+        }
+
+        const data = await response.json();
+        
+        // Extract the context summary from Claude's response
+        let contextSummary = '';
+        if (data.content && Array.isArray(data.content)) {
+            for (const item of data.content) {
+                if (item.type === 'text') {
+                    contextSummary += item.text;
+                }
+            }
+        }
+        
+        return contextSummary;
+    } catch (error) {
+        console.error('Error analyzing text:', error);
+        throw error;
+    }
+}
+
+/**
  * Calls Claude API to generate flashcards from text
  * Uses server-side proxy with user-provided API key
  * 
  * @param {string} text - The highlighted text selection to create cards from
  * @param {string} deckOptions - Comma-separated list of available deck options
- * @param {string} fullText - Optional full text for context
+ * @param {string} textContext - Optional context summary for the document
  * @returns {Promise<Array>} - Array of card objects with front, back, and deck properties
  */
-async function generateCardsWithClaude(text, deckOptions = '', fullText = '') {
+async function generateCardsWithClaude(text, deckOptions = '', textContext = '') {
     try {
         // Get stored API keys
         const { anthropicApiKey } = getStoredApiKeys();
-        
-        // Use the provided fullText for context, or fallback to the text input's full content
-        const contextText = fullText;
         
         // Call the server endpoint, passing the API key in the request if available
         const response = await fetch('/api/generate-cards', {
@@ -119,7 +164,7 @@ async function generateCardsWithClaude(text, deckOptions = '', fullText = '') {
             },
             body: JSON.stringify({
                 text,
-                fullText: contextText,
+                textContext,
                 deckOptions,
                 userApiKey: anthropicApiKey || null // Send user's API key to the server
             })
@@ -152,16 +197,13 @@ async function generateCardsWithClaude(text, deckOptions = '', fullText = '') {
  * Uses server-side proxy with user-provided API key
  * 
  * @param {string} text - The highlighted text selection to create questions from
- * @param {string} fullText - Optional full text for context
+ * @param {string} textContext - Optional context summary for the document
  * @returns {Promise<Array>} - Array of question objects with question, notes, and topic properties
  */
-async function generateQuestionsWithClaude(text, fullText = '') {
+async function generateQuestionsWithClaude(text, textContext = '') {
     try {
         // Get stored API keys
         const { anthropicApiKey } = getStoredApiKeys();
-        
-        // Use the full text if provided, otherwise use the highlighted text for both
-        const contextText = fullText || document.getElementById('textInput').value || text;
         
         // Call the server endpoint, passing the API key in the request if available
         const response = await fetch('/api/generate-questions', {
@@ -171,7 +213,7 @@ async function generateQuestionsWithClaude(text, fullText = '') {
             },
             body: JSON.stringify({
                 text,
-                fullText: contextText,
+                textContext,
                 userApiKey: anthropicApiKey || null // Send user's API key to the server
             })
         });
@@ -500,6 +542,7 @@ function normalizeQuestions(questions) {
 export { 
     generateCardsWithClaude,
     generateQuestionsWithClaude,
+    analyzeTextWithClaude,
     getStoredApiKeys,
     storeApiKeys,
     clearStoredApiKeys,

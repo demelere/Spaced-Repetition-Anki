@@ -324,6 +324,78 @@ button.primary-action:disabled {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
+/* Analysis Status Indicator */
+.analysis-status {
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    background-color: var(--primary-color);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-weight: 500;
+    font-size: 13px;
+    box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4);
+    opacity: 0;
+    transform: translateY(-10px);
+    pointer-events: none;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.analysis-status.active {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Button disabled overlay */
+.button-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    border-radius: 4px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.button-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.button-container {
+    position: relative;
+}
+
+.analysis-spinner {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: white;
+    animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Document context indicator */
+body.has-document-context .text-input {
+    border-left: 4px solid var(--primary-color);
+}
+
 .tab-buttons {
     display: flex;
     gap: 8px;
