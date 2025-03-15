@@ -129,25 +129,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const textInput = document.getElementById('textInput');
     const generateButton = document.getElementById('generateButton');
-    const generateQuestionsButton = document.getElementById('generateQuestionsButton');
     const cardsContainer = document.getElementById('cardsContainer');
-    const questionsContainer = document.getElementById('questionsContainer');
     const exportButton = document.getElementById('exportButton');
-    const exportQuestionsButton = document.getElementById('exportQuestionsButton');
     const clearCardsButton = document.getElementById('clearCardsButton');
-    const clearQuestionsButton = document.getElementById('clearQuestionsButton');
-    const cardCountElement = document.getElementById('cardCount');
-    const questionCountElement = document.getElementById('questionCount');
-    const tabButtons = document.querySelectorAll('.tab-button');
-    const tabContents = document.querySelectorAll('.tab-content');
-    const cardsControlGroup = document.getElementById('cards-controls');
-    const questionsControlGroup = document.getElementById('questions-controls');
-    const splitterHandle = document.querySelector('.splitter-handle');
+    const splitterHandle = document.getElementById('splitterHandle');
+    const editorPanel = document.getElementById('editorPanel');
+    const outputPanel = document.getElementById('outputPanel');
     
     // App State
     const state = {
         cards: [],
-        questions: [],
         selectedText: '',
         currentDeck: null,
         decks: {},
@@ -313,49 +304,8 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Event Listeners
     generateButton.addEventListener('click', generateCardsFromSelection);
-    generateQuestionsButton.addEventListener('click', generateQuestionsFromSelection);
     exportButton.addEventListener('click', exportToMochi);
-    exportQuestionsButton.addEventListener('click', exportQuestions);
     clearCardsButton.addEventListener('click', clearAllCards);
-    clearQuestionsButton.addEventListener('click', clearAllQuestions);
-    
-    // Tab navigation
-    tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            const tabId = button.getAttribute('data-tab');
-            switchToTab(tabId);
-        });
-    });
-    
-    function switchToTab(tabId) {
-        // Find the tab button
-        const tabButton = document.querySelector(`.tab-button[data-tab="${tabId}"]`);
-        if (!tabButton) return;
-        
-        // Remove active class from all buttons and contents
-        tabButtons.forEach(btn => btn.classList.remove('active'));
-        tabContents.forEach(content => content.classList.remove('active'));
-        
-        // Remove active class from all control groups
-        document.querySelectorAll('.tab-control-group').forEach(group => {
-            group.classList.remove('active');
-        });
-        
-        // Add active class to current button and content
-        tabButton.classList.add('active');
-        document.getElementById(tabId).classList.add('active');
-        
-        // Toggle corresponding control group and update generate button visibility
-        if (tabId === 'cards-tab') {
-            document.getElementById('cards-controls').classList.add('active');
-            generateButton.style.display = 'block';
-            generateQuestionsButton.style.display = 'none';
-        } else if (tabId === 'questions-tab') {
-            document.getElementById('questions-controls').classList.add('active');
-            generateButton.style.display = 'none';
-            generateQuestionsButton.style.display = 'block';
-        }
-    }
     
     // Add plain text paste handlers
     textInput.addEventListener('paste', handlePaste);
@@ -413,7 +363,6 @@ document.addEventListener('DOMContentLoaded', () => {
     splitterHandle.addEventListener('mousedown', (e) => {
         isResizing = true;
         startY = e.clientY;
-        const editorPanel = document.querySelector('.editor-panel');
         startHeight = editorPanel.offsetHeight;
         
         document.documentElement.style.cursor = 'row-resize';
@@ -425,17 +374,25 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleMouseMove(e) {
         if (!isResizing) return;
         
-        const editorPanel = document.querySelector('.editor-panel');
-        const container = document.querySelector('.splitter-container');
+        const container = document.querySelector('.dynamic-container');
+        const containerHeight = container.offsetHeight;
         const deltaY = e.clientY - startY;
-        const newHeight = startHeight + deltaY;
+        const newEditorHeight = startHeight + deltaY;
         
-        // Don't allow editor to be smaller than 100px or larger than 80% of container
-        const minHeight = 100;
-        const maxHeight = container.offsetHeight * 0.8;
+        // Calculate editor height as percentage of container
+        const editorHeightPercentage = (newEditorHeight / containerHeight) * 100;
         
-        if (newHeight > minHeight && newHeight < maxHeight) {
-            editorPanel.style.height = `${newHeight}px`;
+        // Don't allow editor to be smaller than 20% or larger than 80% of container
+        const minHeightPercentage = 20;
+        const maxHeightPercentage = 80;
+        
+        if (editorHeightPercentage > minHeightPercentage && editorHeightPercentage < maxHeightPercentage) {
+            // Use percentage for responsive sizing
+            editorPanel.style.height = `${editorHeightPercentage}%`;
+            
+            // Calculate output panel height as the remaining percentage
+            const outputHeightPercentage = 100 - editorHeightPercentage;
+            outputPanel.style.height = `${outputHeightPercentage}%`;
         }
     }
     
@@ -509,10 +466,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update button states to show analyzing
             updateButtonStatesForAnalysis(true);
             
-            // Show subtle loading indicator
-            const statusElement = document.getElementById('selectionStatus');
-            const originalStatus = statusElement.textContent;
-            statusElement.textContent = 'Understanding document...';
+            // Show visual indicator that document is being analyzed
+            const analysisStatus = document.getElementById('analysisOverlay');
+            if (analysisStatus) {
+                analysisStatus.classList.add('active');
+            }
             
             // Call Claude API to get document context
             const contextSummary = await analyzeTextWithClaude(text);
@@ -527,8 +485,10 @@ document.addEventListener('DOMContentLoaded', () => {
             // Show a visual indicator that context is available
             document.body.classList.add('has-document-context');
             
-            // Restore original status or show completion
-            statusElement.textContent = originalStatus;
+            // Hide analysis indicator
+            if (analysisStatus) {
+                analysisStatus.classList.remove('active');
+            }
             // Only show notification if it's a paste (not from automatic analysis)
             if (state.fromPaste) {
                 showNotification('Document understood', 'success', 1500);
@@ -559,7 +519,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleTextSelection() {
         const selection = window.getSelection();
         const selectedText = selection.toString().trim();
-        const selectionStatus = document.getElementById('selectionStatus');
         
         // Store selected text in state
         state.selectedText = selectedText;
@@ -567,19 +526,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Enable/disable buttons based on selection
         const hasSelection = selectedText.length > 0;
         generateButton.disabled = !hasSelection;
-        generateQuestionsButton.disabled = !hasSelection;
         
-        // Update selection status text
+        // Show a visual indication of selection
         if (hasSelection) {
-            // Update word and character count
-            const wordCount = selectedText.split(/\s+/).filter(Boolean).length;
-            const charCount = selectedText.length;
-            selectionStatus.textContent = `${wordCount} words, ${charCount} chars selected`;
-            
-            // Show a visual indication of selection
             textInput.classList.add('has-selection');
         } else {
-            selectionStatus.textContent = 'No text selected';
             textInput.classList.remove('has-selection');
         }
     }
@@ -590,7 +541,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log("Document context:", state.documentContext ? state.documentContext.substring(0, 50) + '...' : 'None');
         
         if (!selectedText) {
-            alert('Please select some text first.');
+            showNotification('Please select some text first.', 'error');
             return;
         }
         
@@ -621,86 +572,22 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update buttons state
             updateButtonStates();
             
-            // Switch to cards tab
-            switchToTab('cards-tab');
+            // Show success notification
+            showNotification(`${cards.length} cards created successfully`, 'success');
             
         } catch (error) {
             console.error('Error generating cards:', error);
             showNotification('Error generating cards: ' + (error.message || 'Please try again.'), 'error');
         } finally {
             generateButton.disabled = false;
-            generateButton.textContent = 'Generate Cards';
+            generateButton.textContent = 'Create Cards';
             
             // No automatic clearing - highlight will remain visible
             // until the user makes another selection or action
         }
     }
     
-    async function generateQuestionsFromSelection() {
-        const selectedText = state.selectedText;
-        
-        if (!selectedText) {
-            showNotification('Please select some text first.', 'error');
-            return;
-        }
-        
-        try {
-            // Update UI to show processing state
-            generateQuestionsButton.disabled = true;
-            generateQuestionsButton.textContent = 'Generating...';
-            
-            // Clear any existing highlights first
-            clearAllHighlights();
-            
-            // Then highlight the selected text
-            highlightSelection();
-            
-            // Get questions from Claude API with proper error handling
-            let questions;
-            try {
-                questions = await generateQuestionsWithClaude(selectedText, state.documentContext);
-                
-                if (!questions || !Array.isArray(questions) || questions.length === 0) {
-                    throw new Error('No valid questions were generated.');
-                }
-                
-                // Check if we got an error response
-                if (questions.length === 1 && questions[0].topic === 'Error') {
-                    throw new Error(questions[0].question);
-                }
-                
-            } catch (apiError) {
-                console.error('API error generating questions:', apiError);
-                showNotification('Error from Claude API. Please try again with a different text selection.', 'error');
-                return;
-            }
-            
-            // Add generated questions to state
-            state.questions = [...state.questions, ...questions];
-            
-            // Render all questions
-            renderQuestions();
-            
-            // Update buttons state
-            updateButtonStates();
-            
-            // Switch to questions tab
-            switchToTab('questions-tab');
-            
-            // Show success notification
-            showNotification(`${questions.length} questions generated successfully`, 'success');
-            
-        } catch (error) {
-            console.error('Error in question generation process:', error);
-            showNotification(error.message || 'Failed to generate questions. Please try again.', 'error');
-        } finally {
-            generateQuestionsButton.disabled = false;
-            generateQuestionsButton.textContent = 'Generate Questions';
-            
-            // No automatic clearing - highlight will remain visible
-            // until the user makes another selection or action
-        }
-    }
+    // generateQuestionsFromSelection function removed
     
     // Chat functions removed
     
@@ -738,26 +625,37 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderCards() {
         cardsContainer.innerHTML = '';
         
-        state.cards.forEach((card, index) => {
-            const cardElement = createCardElement(card, index);
-            cardsContainer.appendChild(cardElement);
-        });
-        
-        // Update card count
-        cardCountElement.textContent = `(${state.cards.length})`;
+        // Show or hide the cards section based on whether there are cards
+        if (state.cards.length > 0) {
+            // Show the output panel and splitter if they're hidden
+            if (outputPanel.style.display === 'none') {
+                // Show the splitter handle with animation
+                splitterHandle.style.display = 'flex';
+                splitterHandle.classList.add('animate-in');
+                
+                // Show the output panel
+                outputPanel.style.display = 'flex';
+                
+                // Set the editor panel to 50% height
+                editorPanel.style.height = '50%';
+            }
+            
+            // Render each card
+            state.cards.forEach((card, index) => {
+                const cardElement = createCardElement(card, index);
+                cardsContainer.appendChild(cardElement);
+            });
+        } else {
+            // Hide the output panel and splitter if there are no cards
+            splitterHandle.style.display = 'none';
+            outputPanel.style.display = 'none';
+            
+            // Reset the editor panel to full height
+            editorPanel.style.height = '100%';
+        }
     }
     
-    function renderQuestions() {
-        questionsContainer.innerHTML = '';
-        
-        state.questions.forEach((question, index) => {
-            const questionElement = createQuestionElement(question, index);
-            questionsContainer.appendChild(questionElement);
-        });
-        
-        // Update question count
-        questionCountElement.textContent = `(${state.questions.length})`;
-    }
+    // renderQuestions function removed
     
     function createCardElement(card, index) {
         const cardDiv = document.createElement('div');
@@ -824,50 +722,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return cardDiv;
     }
     
-    function createQuestionElement(question, index) {
-        const questionDiv = document.createElement('div');
-        questionDiv.className = 'question-item';
-        
-        // Sanitize the question data to ensure it's rendered properly
-        const sanitizeHtml = (text) => {
-            const tempDiv = document.createElement('div');
-            tempDiv.textContent = text;
-            return tempDiv.innerHTML;
-        };
-        
-        // Ensure content is properly formatted
-        const questionText = typeof question.question === 'string' ? 
-            sanitizeHtml(question.question) : sanitizeHtml(JSON.stringify(question.question));
-            
-        const topic = question.topic && typeof question.topic === 'string' ? 
-            sanitizeHtml(question.topic) : 'General';
-        
-        questionDiv.innerHTML = `
-            <div class="question-header">
-                <div class="question-header-left">
-                    <span class="question-topic">${topic}</span>
-                </div>
-                <div class="question-header-right">
-                    <button class="delete-question-button" data-index="${index}">Delete</button>
-                </div>
-            </div>
-            <div class="question-body">
-                <div class="question-text" contenteditable="true">${questionText}</div>
-            </div>
-        `;
-        
-        // Add event listeners
-        const deleteButton = questionDiv.querySelector('.delete-question-button');
-        deleteButton.addEventListener('click', () => deleteQuestion(index));
-        
-        // Make question content editable
-        const questionTextElem = questionDiv.querySelector('.question-text');
-        questionTextElem.addEventListener('blur', () => {
-            state.questions[index].question = questionTextElem.textContent;
-        });
-        
-        return questionDiv;
-    }
+    // createQuestionElement function removed
     
     function deleteCard(index) {
         state.cards.splice(index, 1);
@@ -875,11 +730,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateButtonStates();
     }
     
-    function deleteQuestion(index) {
-        state.questions.splice(index, 1);
-        renderQuestions();
-        updateButtonStates();
-    }
+    // deleteQuestion function removed
     
     function editCardDeck(index) {
         const card = state.cards[index];
@@ -1018,11 +869,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasCards = state.cards.length > 0;
         exportButton.disabled = !hasCards;
         clearCardsButton.disabled = !hasCards;
-        
-        // Questions buttons
-        const hasQuestions = state.questions.length > 0;
-        exportQuestionsButton.disabled = !hasQuestions;
-        clearQuestionsButton.disabled = !hasQuestions;
     }
     
     function updateButtonStatesForAnalysis(isAnalyzing) {
@@ -1035,7 +881,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Get the elements (now they must exist)
         const status = document.getElementById('analysisOverlay');
         const generateButtonOverlay = generateButton.parentElement.querySelector('.button-overlay');
-        const questionsButtonOverlay = generateQuestionsButton.parentElement.querySelector('.button-overlay');
         
         if (isAnalyzing) {
             // Show analyzing status and disable buttons
@@ -1043,11 +888,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Disable buttons and show overlays
             generateButton.disabled = true;
-            generateQuestionsButton.disabled = true;
             
             // Show button overlays
             generateButtonOverlay.classList.add('active');
-            questionsButtonOverlay.classList.add('active');
         } else {
             // Hide analyzing status
             status.classList.remove('active');
@@ -1055,11 +898,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Only enable generate buttons if there's selected text
             const hasSelection = state.selectedText.length > 0;
             generateButton.disabled = !hasSelection;
-            generateQuestionsButton.disabled = !hasSelection;
             
             // Hide button overlays
             generateButtonOverlay.classList.remove('active');
-            questionsButtonOverlay.classList.remove('active');
         }
     }
     
@@ -1075,21 +916,24 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Add text
         const text = document.createElement('span');
-        text.textContent = 'Understanding document...';
+        text.textContent = 'Claude is understanding your document...';
+        
+        // Add emoji or icon
+        const icon = document.createElement('span');
+        icon.textContent = '✨'; // Magic sparkles
+        icon.style.fontSize = '18px';
+        icon.style.marginRight = '5px';
         
         // Assemble elements
+        status.appendChild(icon);
         status.appendChild(spinner);
         status.appendChild(text);
         
-        // Add to editor panel
-        const editorPanel = document.querySelector('.editor-panel');
-        editorPanel.style.position = 'relative';
-        editorPanel.appendChild(status);
+        // Add to body so it's fixed at the top
+        document.body.appendChild(status);
         
         // Add button overlays
-        // Wrap both generate buttons in containers
         setupButtonOverlay(generateButton);
-        setupButtonOverlay(generateQuestionsButton);
     }
     
     function setupButtonOverlay(button) {
@@ -1150,7 +994,7 @@ document.addEventListener('DOMContentLoaded', () => {
         
         confirmButton.addEventListener('click', () => {
             state.cards = [];
-            renderCards();
+            renderCards(); // This will hide the output panel and restore full height to editor
             updateButtonStates();
             document.body.removeChild(modalOverlay);
             showNotification('All cards cleared', 'info');
@@ -1167,56 +1011,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(modalOverlay);
     }
     
-    function clearAllQuestions() {
-        // Create modal confirmation
-        const modalOverlay = document.createElement('div');
-        modalOverlay.className = 'modal-overlay';
-        
-        const modalContent = document.createElement('div');
-        modalContent.className = 'modal-content';
-        
-        const modalHeader = document.createElement('h3');
-        modalHeader.textContent = 'Clear all questions?';
-        
-        const modalText = document.createElement('p');
-        modalText.textContent = 'This action cannot be undone.';
-        modalText.style.margin = '10px 0';
-        
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'modal-buttons';
-        
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Cancel';
-        cancelButton.className = 'modal-cancel';
-        cancelButton.addEventListener('click', () => {
-            document.body.removeChild(modalOverlay);
-        });
-        
-        const confirmButton = document.createElement('button');
-        confirmButton.textContent = 'Clear All';
-        confirmButton.className = 'modal-confirm';
-        confirmButton.style.backgroundColor = '#ea4335';
-        confirmButton.style.color = 'white';
-        confirmButton.style.borderColor = '#d93025';
-        
-        confirmButton.addEventListener('click', () => {
-            state.questions = [];
-            renderQuestions();
-            updateButtonStates();
-            document.body.removeChild(modalOverlay);
-            showNotification('All questions cleared', 'info');
-        });
-        
-        buttonContainer.appendChild(cancelButton);
-        buttonContainer.appendChild(confirmButton);
-        
-        modalContent.appendChild(modalHeader);
-        modalContent.appendChild(modalText);
-        modalContent.appendChild(buttonContainer);
-        
-        modalOverlay.appendChild(modalContent);
-        document.body.appendChild(modalOverlay);
-    }
+    // clearAllQuestions function removed
     
     
     async function exportToMochi() {
@@ -1354,59 +1149,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    function exportQuestions() {
-        // Format questions as bullet point markdown
-        if (state.questions.length === 0) {
-            showNotification('No questions to export', 'info');
-            return;
-        }
-        
-        let questionsMarkdown = '';
-        
-        state.questions.forEach(q => {
-            questionsMarkdown += `- ${q.question}\n\n`;
-        });
-        
-        try {
-            // Download as markdown
-            const blob = new Blob([questionsMarkdown], { type: 'text/markdown' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `interview-questions-${new Date().toISOString().slice(0, 10)}.md`;
-            a.style.display = 'none'; // Hide the element
-            document.body.appendChild(a);
-            a.click();
-            
-            // Cleanup
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100);
-            
-            showNotification(`${state.questions.length} questions exported successfully`, 'success');
-        } catch (error) {
-            console.error('Error exporting questions:', error);
-            
-            // Alternative method for environments where the download might be blocked
-            const textarea = document.createElement('textarea');
-            textarea.value = questionsMarkdown;
-            document.body.appendChild(textarea);
-            textarea.select();
-            
-            try {
-                document.execCommand('copy');
-                showNotification('Questions copied to clipboard instead (download failed)', 'warning');
-            } catch (clipboardError) {
-                console.error('Clipboard copy failed:', clipboardError);
-                showNotification('Export failed. Check console for questions content', 'error');
-                console.log('QUESTIONS CONTENT:');
-                console.log(questionsMarkdown);
-            }
-            
-            document.body.removeChild(textarea);
-        }
-    }
+    // exportQuestions function removed
     
     function formatCardsForMochi() {
         // Group cards by deck

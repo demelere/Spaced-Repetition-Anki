@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Flashcards and Questions</title>
+    <title>Mochi Card Generator</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -11,65 +11,39 @@
         <header>
             <div class="header-content">
                 <div class="header-title">
-                    <h1>Flashcards and Questions</h1>
+                    <h1>Mochi Card Generator</h1>
                     <div class="header-attribution">
                         by <a href="https://dwarkeshpatel.com" target="_blank">Dwarkesh</a> • 
                         <a href="https://github.com/dwarkeshsp/spaced-rep" target="_blank">GitHub</a>
                     </div>
                 </div>
                 <div class="header-controls">
-                    <span id="selectionStatus" class="selection-counter">No text selected</span>
-                    <div class="action-buttons">
+                    <div class="unified-controls">
                         <button id="generateButton" class="primary-action" disabled>Create Cards</button>
-                        <button id="generateQuestionsButton" class="primary-action" disabled>Create Questions</button>
+                        <button id="exportButton" disabled>Export to Mochi</button>
+                        <button id="clearCardsButton" disabled>Clear</button>
                     </div>
                 </div>
             </div>
         </header>
         
         <main class="main-content">
-            <div class="splitter-container">
+            <div class="dynamic-container">
                 <!-- Text Input Panel -->
-                <section class="editor-panel">
-                    <div id="textInput" class="text-input" contenteditable="true" placeholder="Paste or type your text here, then highlight sections to generate content..."></div>
+                <section class="editor-panel" id="editorPanel">
+                    <div id="textInput" class="text-input" contenteditable="true" placeholder="Paste or type your text here, then highlight sections to generate cards..."></div>
                 </section>
                 
-                <!-- Handle for resizing -->
-                <div class="splitter-handle">
+                <!-- Handle for resizing (initially hidden) -->
+                <div class="splitter-handle" id="splitterHandle" style="display: none;">
                     <div class="handle-line"></div>
                 </div>
                 
-                <!-- Output Section -->
-                <section class="output-panel">
-                    <!-- Tab Navigation -->
-                    <nav class="tab-bar">
-                        <div class="tab-buttons">
-                            <button class="tab-button active" data-tab="cards-tab">Cards <span id="cardCount">(0)</span></button>
-                            <button class="tab-button" data-tab="questions-tab">Questions <span id="questionCount">(0)</span></button>
-                        </div>
-                        
-                        <div class="tab-actions">
-                            <div id="cards-controls" class="tab-control-group active">
-                                <!-- Deck selector will be inserted here by JS -->
-                                <button id="exportButton" disabled>Export to Mochi</button>
-                                <button id="clearCardsButton" disabled>Clear</button>
-                            </div>
-                            <div id="questions-controls" class="tab-control-group">
-                                <button id="exportQuestionsButton" disabled>Export</button>
-                                <button id="clearQuestionsButton" disabled>Clear</button>
-                            </div>
-                        </div>
-                    </nav>
-                    
-                    <!-- Tab Content -->
-                    <div class="tab-container">
-                        <div id="cards-tab" class="tab-content active">
-                            <div id="cardsContainer" class="cards-container"></div>
-                        </div>
-                        
-                        <div id="questions-tab" class="tab-content">
-                            <div id="questionsContainer" class="questions-container"></div>
-                        </div>
+                <!-- Output Section (initially hidden) -->
+                <section class="output-panel" id="outputPanel" style="display: none;">
+                    <!-- Cards Content -->
+                    <div class="content-container">
+                        <div id="cardsContainer" class="cards-container"></div>
                     </div>
                 </section>
             </div>
