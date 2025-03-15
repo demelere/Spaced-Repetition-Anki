@@ -21,6 +21,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const apiKeyCancelButton = document.getElementById('apiKeyCancel');
     const anthropicApiKeyError = document.getElementById('anthropicApiKeyError');
     
+    // Dropdown Menu
+    const menuButton = document.getElementById('menuButton');
+    const dropdownMenu = document.getElementById('dropdown-menu');
+    
+    // Toggle dropdown menu when menu button is clicked
+    menuButton.addEventListener('click', () => {
+        const expanded = menuButton.getAttribute('aria-expanded') === 'true';
+        
+        if (expanded) {
+            // Close dropdown
+            dropdownMenu.classList.remove('show');
+            menuButton.setAttribute('aria-expanded', 'false');
+        } else {
+            // Open dropdown
+            dropdownMenu.classList.add('show');
+            menuButton.setAttribute('aria-expanded', 'true');
+        }
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (event) => {
+        if (!menuButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
+            dropdownMenu.classList.remove('show');
+            menuButton.setAttribute('aria-expanded', 'false');
+        }
+    });
+    
     // Check for stored API keys on startup
     const storedKeys = getStoredApiKeys();
     if (storedKeys.anthropicApiKey) {
@@ -466,11 +493,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update button states to show analyzing
             updateButtonStatesForAnalysis(true);
             
-            // Show visual indicator that document is being analyzed
-            const analysisStatus = document.getElementById('analysisOverlay');
-            if (analysisStatus) {
-                analysisStatus.classList.add('active');
-            }
+            // No visual indicator needed
+            // Just continue with analysis silently
             
             // Call Claude API to get document context
             const contextSummary = await analyzeTextWithClaude(text);
@@ -485,20 +509,13 @@ document.addEventListener('DOMContentLoaded', () => {
             // Show a visual indicator that context is available
             document.body.classList.add('has-document-context');
             
-            // Hide analysis indicator
-            if (analysisStatus) {
-                analysisStatus.classList.remove('active');
-            }
-            // Only show notification if it's a paste (not from automatic analysis)
-            if (state.fromPaste) {
-                showNotification('Document understood', 'success', 1500);
-                state.fromPaste = false;
-            }
+            // No need to change indicator state - it's always hidden
+            // Don't show any notification when document is understood
+            state.fromPaste = false;
             
         } catch (error) {
             console.error('Error analyzing document:', error);
-            // Show error notification
-            showNotification('Could not fully understand document', 'error', 2000);
+            // Don't show error notification to user, just log to console
         } finally {
             // Reset analyzing state
             state.isAnalyzing = false;
@@ -878,65 +895,35 @@ document.addEventListener('DOMContentLoaded', () => {
             createAnalysisOverlay();
         }
         
-        // Get the elements (now they must exist)
-        const status = document.getElementById('analysisOverlay');
-        const generateButtonOverlay = generateButton.parentElement.querySelector('.button-overlay');
-        
+        // Only update button enabled state
         if (isAnalyzing) {
-            // Show analyzing status and disable buttons
-            status.classList.add('active');
-            
-            // Disable buttons and show overlays
-            generateButton.disabled = true;
-            
-            // Show button overlays
-            generateButtonOverlay.classList.add('active');
+            // Don't show analyzing status, just disable generate button if needed
+            // Only disable button if there's no selection yet
+            if (!state.selectedText || state.selectedText.length === 0) {
+                generateButton.disabled = true;
+            }
         } else {
-            // Hide analyzing status
-            status.classList.remove('active');
-            
-            // Only enable generate buttons if there's selected text
-            const hasSelection = state.selectedText.length > 0;
+            // Enable generate button only if there's selected text
+            const hasSelection = state.selectedText && state.selectedText.length > 0;
             generateButton.disabled = !hasSelection;
-            
-            // Hide button overlays
-            generateButtonOverlay.classList.remove('active');
         }
     }
     
     function createAnalysisOverlay() {
-        // Create the analysis status indicator
+        // Create a hidden analysis status indicator
         const status = document.createElement('div');
-        status.id = 'analysisOverlay'; // Keep same ID for existing code
+        status.id = 'analysisOverlay';
         status.className = 'analysis-status';
+        status.style.display = 'none'; // Keep it hidden as requested
         
-        // Create spinner
-        const spinner = document.createElement('span');
-        spinner.className = 'analysis-spinner';
-        
-        // Add text
-        const text = document.createElement('span');
-        text.textContent = 'Claude is understanding your document...';
-        
-        // Add emoji or icon
-        const icon = document.createElement('span');
-        icon.textContent = '✨'; // Magic sparkles
-        icon.style.fontSize = '18px';
-        icon.style.marginRight = '5px';
-        
-        // Assemble elements
-        status.appendChild(icon);
-        status.appendChild(spinner);
-        status.appendChild(text);
-        
-        // Add to body so it's fixed at the top
+        // Add to body so it exists for code that references it
         document.body.appendChild(status);
         
-        // Add button overlays
-        setupButtonOverlay(generateButton);
+        // Add button overlays but make them invisible
+        setupButtonOverlay(generateButton, true);
     }
     
-    function setupButtonOverlay(button) {
+    function setupButtonOverlay(button, hidden = false) {
         // Create a container for the button if it's not already in one
         if (!button.parentElement.classList.contains('button-container')) {
             const container = document.createElement('div');
@@ -949,6 +936,9 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add the overlay
             const overlay = document.createElement('div');
             overlay.className = 'button-overlay';
+            if (hidden) {
+                overlay.style.display = 'none'; // Keep the overlay hidden
+            }
             
             // Create spinner
             const spinner = document.createElement('span');

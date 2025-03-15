@@ -45,6 +45,10 @@
     /* Layout */
     --header-height: 64px; /* Slightly taller header */
     --editor-default-height: 65%;
+    
+    /* Breakpoints for responsive design */
+    --mobile-breakpoint: 640px;
+    --tablet-breakpoint: 768px;
 }
 
 body {
@@ -84,7 +88,7 @@ header {
 
 .header-content {
     height: 100%;
-    padding: 0 24px;
+    padding: 0 16px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -100,6 +104,7 @@ header {
 .unified-controls {
     display: flex;
     gap: 12px;
+    align-items: center;
 }
 
 .header-title {
@@ -112,6 +117,26 @@ h1 {
     font-size: 20px;
     font-weight: 600;
     letter-spacing: 0.25px;
+}
+
+/* Responsive header on small screens */
+@media (max-width: 640px) {
+    .header-content {
+        padding: 0 12px;
+    }
+    
+    h1 {
+        font-size: 16px;
+    }
+    
+    .header-attribution {
+        font-size: 10px;
+    }
+    
+    button.primary-action {
+        padding: 8px 12px;
+        font-size: 14px;
+    }
 }
 
 .header-attribution {
@@ -135,6 +160,97 @@ h1 {
     opacity: 1;
 }
 
+/* Dropdown Menu */
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.menu-button {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.menu-button:hover, .menu-button:focus {
+    background-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.menu-button:active {
+    transform: translateY(1px);
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.menu-icon {
+    width: 18px;
+    height: 18px;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>');
+    background-repeat: no-repeat;
+    background-position: center;
+    opacity: 0.9;
+}
+
+.dropdown-menu {
+    position: absolute;
+    right: 0;
+    top: 44px;
+    background-color: white;
+    min-width: 180px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    padding: 8px 0;
+    z-index: 110;
+    transform: translateY(-10px);
+    opacity: 0;
+    visibility: hidden;
+    transition: transform 0.2s ease, opacity 0.2s ease, visibility 0.2s ease;
+    border: 1px solid var(--gray-200);
+}
+
+.dropdown-menu.show {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+}
+
+.dropdown-item {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: 10px 16px;
+    color: var(--gray-700);
+    background-color: transparent;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.dropdown-item:hover:not(:disabled) {
+    background-color: var(--gray-100);
+    color: var(--gray-900);
+    transform: none;
+    box-shadow: none;
+}
+
+.dropdown-item:disabled {
+    color: var(--gray-400);
+    background-color: transparent;
+    cursor: not-allowed;
+}
+
 /* Button Styles */
 button {
     background-color: var(--white);
@@ -152,6 +268,13 @@ button {
     align-items: center;
     justify-content: center;
     line-height: 1.25;
+}
+
+@media (max-width: 640px) {
+    button {
+        padding: 6px 12px;
+        font-size: 13px;
+    }
 }
 
 button:hover {
@@ -211,6 +334,29 @@ button.primary-action:disabled {
     flex-grow: 1;
     height: calc(100vh - var(--header-height));
     overflow: hidden;
+}
+
+/* Tooltip styles for the disabled Create Cards button */
+button[disabled][title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    z-index: 100;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 6px;
+    padding: 6px 10px;
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    border-radius: 4px;
+    font-size: 12px;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+/* Position relative for the tooltip container */
+button.primary-action {
+    position: relative;
 }
 
 .dynamic-container {
@@ -479,6 +625,15 @@ body.has-document-context .editor-panel::after {
     grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
     gap: 24px;
     padding: 28px;
+}
+
+/* Responsive cards on small screens */
+@media (max-width: 640px) {
+    .cards-container {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 16px;
+    }
 }
 
 .card {
@@ -1165,6 +1320,13 @@ body.has-document-context .editor-panel::after {
     border: 1px solid var(--gray-200);
 }
 
+@media (max-width: 640px) {
+    .api-key-container {
+        padding: 20px 16px;
+        max-width: 95%;
+    }
+}
+
 @keyframes slideUp {
     0% { transform: translateY(20px); }
     100% { transform: translateY(0); }
@@ -1372,41 +1534,38 @@ body.has-document-context .editor-panel::after {
     line-height: 1.4;
 }
 
-.settings-button {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    width: 46px;
-    height: 46px;
-    border-radius: 50%;
-    background-color: var(--white);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15), 0 2px 4px rgba(0, 0, 0, 0.05);
+/* Header settings button */
+.header-settings-button {
+    margin-left: 12px;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 4px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.25);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    z-index: 100;
-    border: 1px solid var(--gray-200);
     transition: all 0.2s ease;
 }
 
-.settings-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15), 0 3px 6px rgba(0, 0, 0, 0.1);
-    background-color: var(--primary-light);
-    border-color: var(--primary-color);
+.header-settings-button:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.35);
 }
 
-.settings-button:active {
-    transform: translateY(0);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+.header-settings-button:active {
+    transform: translateY(1px);
+    background-color: rgba(255, 255, 255, 0.15);
 }
 
 .settings-icon {
-    width: 22px;
-    height: 22px;
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="%232563eb" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>');
+    width: 18px;
+    height: 18px;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>');
     background-repeat: no-repeat;
     background-position: center;
     transition: all 0.2s ease;
+    opacity: 0.8;
 }

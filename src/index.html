@@ -19,9 +19,17 @@
                 </div>
                 <div class="header-controls">
                     <div class="unified-controls">
-                        <button id="generateButton" class="primary-action" disabled>Create Cards</button>
-                        <button id="exportButton" disabled>Export to Mochi</button>
-                        <button id="clearCardsButton" disabled>Clear</button>
+                        <button id="generateButton" class="primary-action" disabled title="Select text first">Create Cards</button>
+                        <div class="dropdown">
+                            <button id="menuButton" class="menu-button" aria-expanded="false" aria-haspopup="true">
+                                <span class="menu-icon"></span>
+                            </button>
+                            <div class="dropdown-menu" id="dropdown-menu">
+                                <button id="exportButton" disabled class="dropdown-item">Export to Mochi</button>
+                                <button id="clearCardsButton" disabled class="dropdown-item">Clear Cards</button>
+                                <button id="settingsButton" class="dropdown-item">API Keys</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -50,10 +58,7 @@
         </main>
     </div>
     
-    <!-- Settings button -->
-    <div id="settingsButton" class="settings-button">
-        <div class="settings-icon"></div>
-    </div>
+    <!-- Settings button moved to header -->
     
     <!-- API Key Management Modal -->
     <div id="apiKeyModal" class="api-key-overlay" style="display: none;">
