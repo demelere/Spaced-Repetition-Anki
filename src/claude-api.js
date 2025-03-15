@@ -176,7 +176,7 @@ async function generateCardsWithClaude(text, deckOptions = '', textContext = '')
         }
 
         const data = await response.json();
-        console.log('Raw response data:', data);
+        // Process the response data
         
         // Parse Claude's response to extract cards
         return parseClaudeResponse(data);
@@ -200,8 +200,6 @@ async function generateCardsWithClaude(text, deckOptions = '', textContext = '')
  * @returns {Array} - Array of card objects
  */
 function parseClaudeResponse(responseData) {
-    console.log('Claude response:', responseData);
-    
     let responseText = '';
     
     // Extract text content from response
@@ -218,7 +216,7 @@ function parseClaudeResponse(responseData) {
         responseText = JSON.stringify(responseData);
     }
     
-    console.log('Raw text response from Claude:', responseText);
+    // Process Claude's response text
     
     // Try to parse as JSON
     try {

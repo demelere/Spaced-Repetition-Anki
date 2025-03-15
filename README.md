@@ -1,6 +1,6 @@
 # Mochi Card Generator
 
-A powerful web application for creating high-quality spaced repetition flashcards and podcast interview questions with Claude 3.7, featuring direct Mochi integration.
+A streamlined web application for creating high-quality spaced repetition flashcards using Claude 3.7, featuring direct Mochi integration and a mobile-responsive interface.
 
 ## Features
 
@@ -10,22 +10,19 @@ A powerful web application for creating high-quality spaced repetition flashcard
   - Cards are automatically categorized into appropriate Mochi decks
   - Edit cards inline before exporting
 
-- **Podcast Interview Questions**
-  - Generate thought-provoking, open-ended questions for interviews
-  - Questions include topic categorization
-  - Export as markdown for easy integration with notes
-
 - **Mochi Integration**
   - Dynamic deck fetching from your Mochi account
   - Direct upload to Mochi without file handling
-  - Fallback to file export if API is unavailable
+  - Fallback to markdown export if API is unavailable
   - Properly handles deck organization (excludes trashed/archived)
 
 - **Modern User Interface**
-  - Clean, intuitive design with tabbed navigation
+  - Clean, intuitive design with dropdown menu
+  - Mobile-responsive layout
   - Real-time notification system
   - Confirmation modals for destructive actions
   - Resizable split panels for comfortable editing
+  - Compact card design for efficient space utilization
 
 ## Getting Started
 
@@ -70,18 +67,10 @@ The application uses the following environment variables:
 
 1. Paste text into the input area
 2. Highlight a section of text
-3. Click "Generate Cards from Selection"
+3. Click "Create Cards"
 4. Review and edit the generated cards
-5. Optionally change the deck for any card
-6. Click "Export to Mochi" when finished
-
-### Creating Interview Questions
-
-1. Paste text into the input area
-2. Highlight a section of text
-3. Click "Generate Questions from Selection"
-4. Review and edit the generated questions
-5. Click "Export Questions" to download as markdown
+5. Optionally change the deck for any card by clicking the deck label
+6. Use the dropdown menu to export to Mochi or as markdown
 
 ## Deployment Options
 
@@ -108,12 +97,12 @@ This application follows established principles for effective spaced repetition 
 - **Connections**: Building relationships between concepts
 - **Deep Understanding**: Emphasizing "why" and "how" questions
 
-For interview questions, the application focuses on:
+The UI design prioritizes:
 
-- Open-ended, thought-provoking questions
-- Exploring implications and connections
-- Questions that elicit detailed, interesting responses
-- Contextualized topics for easy organization
+- Simplicity and focus on the core functionality
+- Mobile-responsive layout that works on any device
+- Space efficiency with compact card design
+- Intuitive interactions with minimal learning curve
 
 ## License
 

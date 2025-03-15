@@ -55,7 +55,6 @@ document.addEventListener('DOMContentLoaded', () => {
             mochiApiKeyInput.value = storedKeys.mochiApiKey;
             // Fetch decks right away if we have a Mochi API key
             fetchDecks()
-                .then(() => console.log('Loaded Mochi decks on startup'))
                 .catch(error => console.error('Failed to load Mochi decks on startup:', error));
         }
     } else {
@@ -92,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (mochiKey) {
                 try {
                     await fetchDecks();
-                    console.log('Successfully fetched Mochi decks with user key');
+                    // Mochi decks successfully fetched
                 } catch (error) {
                     console.error('Failed to fetch Mochi decks:', error);
                     showNotification('Failed to connect to Mochi API', 'error');
@@ -179,7 +178,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const { mochiApiKey } = getStoredApiKeys();
             
             if (!mochiApiKey) {
-                console.warn('Mochi API key not configured. Using fallback decks.');
+                // Use fallback decks when no Mochi API key is available
                 state.decks = { "General": "general" };
                 state.currentDeck = "General";
                 
@@ -206,12 +205,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         
                         // Set currentDeck to first deck in the list
                         state.currentDeck = Object.keys(data.decks)[0] || "General";
-                        console.log(`Loaded ${Object.keys(data.decks).length} active decks from Mochi`);
+                        // Decks loaded successfully
                         return;
                     }
                 }
             } catch (serverError) {
-                console.warn('Server-side Mochi API failed:', serverError);
+                // Server-side API failed, trying client-side API next
             }
             
             // If server-side fails, try client-side API
@@ -252,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         formattedDecks[deck.name] = cleanId;
                     });
                     
-                    console.log(`Loaded ${activeDecksCount} active decks out of ${decksData.docs.length} total decks from Mochi API`);
+                    // Successfully loaded active decks from Mochi API
                     
                     // Store the decks in the state
                     state.decks = formattedDecks;
