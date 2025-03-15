@@ -1,8 +1,8 @@
-# Mochi Card Generator - Project Documentation
+# Flash card Generator - Project Documentation
 
 ## Project Overview
 
-Mochi Card Generator is a streamlined web application for creating high-quality spaced repetition flashcards from text content. The application allows users to paste text, highlight sections of interest, and use Claude 3.7 to generate effective flashcards that can be exported directly to Mochi or as markdown files.
+Flash card Generator is a streamlined web application for creating high-quality spaced repetition flashcards from text content. The application allows users to paste text, highlight sections of interest, and use Claude 3.7 to generate effective flashcards that can be exported directly to Mochi or as markdown files.
 
 ### Core Purpose
 

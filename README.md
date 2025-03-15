@@ -1,4 +1,4 @@
-# Mochi Card Generator
+# Flash Card Generator
 
 A streamlined web application for creating high-quality spaced repetition flashcards using Claude 3.7, featuring direct Mochi integration and a mobile-responsive interface.
 
