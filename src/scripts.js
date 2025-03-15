@@ -1,11 +1,9 @@
 // Import Claude API functions
 import { 
     generateCardsWithClaude, 
-    generateQuestionsWithClaude,
     analyzeTextWithClaude,
     getStoredApiKeys,
     storeApiKeys,
-    clearStoredApiKeys,
     validateAnthropicApiKey,
     hasApiKeys
 } from './claude-api.js';
@@ -490,37 +488,32 @@ document.addEventListener('DOMContentLoaded', () => {
             // Set analyzing state flag
             state.isAnalyzing = true;
             
-            // Update button states to show analyzing
-            updateButtonStatesForAnalysis(true);
-            
-            // No visual indicator needed
-            // Just continue with analysis silently
+            // Only disable the button if there's no selection
+            if (!state.selectedText || state.selectedText.length === 0) {
+                generateButton.disabled = true;
+            }
             
             // Call Claude API to get document context
             const contextSummary = await analyzeTextWithClaude(text);
             
-            if (!contextSummary) {
-                throw new Error('No context summary returned');
+            if (contextSummary) {
+                // Store in state for later use
+                state.documentContext = contextSummary;
+                
+                // Show a subtle visual indicator that context is available
+                document.body.classList.add('has-document-context');
             }
             
-            // Store in state for later use
-            state.documentContext = contextSummary;
-            
-            // Show a visual indicator that context is available
-            document.body.classList.add('has-document-context');
-            
-            // No need to change indicator state - it's always hidden
-            // Don't show any notification when document is understood
             state.fromPaste = false;
-            
         } catch (error) {
             console.error('Error analyzing document:', error);
-            // Don't show error notification to user, just log to console
         } finally {
             // Reset analyzing state
             state.isAnalyzing = false;
-            // Update button states
-            updateButtonStatesForAnalysis(false);
+            
+            // Re-enable button if there's a selection
+            const hasSelection = state.selectedText && state.selectedText.length > 0;
+            generateButton.disabled = !hasSelection;
         }
     }
     
@@ -554,8 +547,6 @@ document.addEventListener('DOMContentLoaded', () => {
     
     async function generateCardsFromSelection() {
         const selectedText = state.selectedText;
-        console.log("Selected text:", selectedText);
-        console.log("Document context:", state.documentContext ? state.documentContext.substring(0, 50) + '...' : 'None');
         
         if (!selectedText) {
             showNotification('Please select some text first.', 'error');
@@ -567,13 +558,11 @@ document.addEventListener('DOMContentLoaded', () => {
             generateButton.disabled = true;
             generateButton.textContent = 'Generating...';
             
-            // Clear any existing highlights first
+            // Clear any existing highlights and re-highlight selection
             clearAllHighlights();
-            
-            // Then highlight the selected text
             highlightSelection();
             
-            // Get cards from Claude API using available deck options and document context
+            // Get cards from Claude API
             const cards = await generateCardsWithClaude(
                 selectedText,
                 Object.keys(state.decks).join(', '),
@@ -583,24 +572,17 @@ document.addEventListener('DOMContentLoaded', () => {
             // Add generated cards to state
             state.cards = [...state.cards, ...cards];
             
-            // Render all cards
+            // Update UI
             renderCards();
-            
-            // Update buttons state
             updateButtonStates();
             
-            // Show success notification
             showNotification(`${cards.length} cards created successfully`, 'success');
-            
         } catch (error) {
             console.error('Error generating cards:', error);
             showNotification('Error generating cards: ' + (error.message || 'Please try again.'), 'error');
         } finally {
             generateButton.disabled = false;
             generateButton.textContent = 'Create Cards';
-            
-            // No automatic clearing - highlight will remain visible
-            // until the user makes another selection or action
         }
     }
     
@@ -612,28 +594,14 @@ document.addEventListener('DOMContentLoaded', () => {
     // Simple approach: We won't try to modify the DOM for highlighting.
     // Instead, we'll create a new element that overlays the text.
     
-    // Variable to track the highlight overlay element
-    let highlightOverlay = null;
-    
     function highlightSelection() {
-        // Clear any existing highlight first
-        if (highlightOverlay) {
-            highlightOverlay.remove();
-            highlightOverlay = null;
-        }
-        
         try {
             // Get the selected text from state
             const selectedText = state.selectedText;
             if (!selectedText || selectedText.length === 0) return;
             
-            // Instead of modifying the DOM, we'll just add a class to the text input
-            // to show the user their selection was registered
+            // Just add a class to indicate selection
             textInput.classList.add('has-selection');
-            
-            // That's it! We'll let the native browser selection handle the highlighting
-            // This is much more reliable than trying to manipulate the DOM
-            
         } catch (e) {
             console.error('Error in highlighting:', e);
         }
@@ -696,20 +664,17 @@ document.addEventListener('DOMContentLoaded', () => {
         cardDiv.innerHTML = `
             <div class="card-header">
                 <div class="card-header-left">
-                    <span class="card-deck">${deck}</span>
+                    <span class="card-deck" title="Click to change deck">${deck}</span>
                 </div>
                 <div class="card-header-right">
-                    <button class="edit-deck-button">Change Deck</button>
-                    <button class="delete-button" data-index="${index}">Delete</button>
+                    <button class="delete-button" data-index="${index}" title="Delete Card">×</button>
                 </div>
             </div>
             <div class="card-content">
                 <div class="card-front">
-                    <div class="card-label">Question:</div>
                     <div class="card-text" contenteditable="true">${front}</div>
                 </div>
                 <div class="card-back">
-                    <div class="card-label">Answer:</div>
                     <div class="card-text" contenteditable="true">${back}</div>
                 </div>
             </div>
@@ -719,8 +684,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const deleteButton = cardDiv.querySelector('.delete-button');
         deleteButton.addEventListener('click', () => deleteCard(index));
         
-        const editDeckButton = cardDiv.querySelector('.edit-deck-button');
-        editDeckButton.addEventListener('click', () => editCardDeck(index));
+        const deckLabel = cardDiv.querySelector('.card-deck');
+        deckLabel.addEventListener('click', () => editCardDeck(index));
         
         // Make card content editable
         const frontText = cardDiv.querySelector('.card-front .card-text');
@@ -882,72 +847,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function updateButtonStates() {
-        // Cards buttons
+        // Update card-related buttons based on whether cards exist
         const hasCards = state.cards.length > 0;
         exportButton.disabled = !hasCards;
         clearCardsButton.disabled = !hasCards;
-    }
-    
-    function updateButtonStatesForAnalysis(isAnalyzing) {
-        // Create overlays if they don't exist
-        const analysisStatus = document.getElementById('analysisOverlay');
-        if (!analysisStatus) {
-            createAnalysisOverlay();
-        }
         
-        // Only update button enabled state
-        if (isAnalyzing) {
-            // Don't show analyzing status, just disable generate button if needed
-            // Only disable button if there's no selection yet
-            if (!state.selectedText || state.selectedText.length === 0) {
-                generateButton.disabled = true;
-            }
-        } else {
-            // Enable generate button only if there's selected text
-            const hasSelection = state.selectedText && state.selectedText.length > 0;
-            generateButton.disabled = !hasSelection;
-        }
-    }
-    
-    function createAnalysisOverlay() {
-        // Create a hidden analysis status indicator
-        const status = document.createElement('div');
-        status.id = 'analysisOverlay';
-        status.className = 'analysis-status';
-        status.style.display = 'none'; // Keep it hidden as requested
-        
-        // Add to body so it exists for code that references it
-        document.body.appendChild(status);
-        
-        // Add button overlays but make them invisible
-        setupButtonOverlay(generateButton, true);
-    }
-    
-    function setupButtonOverlay(button, hidden = false) {
-        // Create a container for the button if it's not already in one
-        if (!button.parentElement.classList.contains('button-container')) {
-            const container = document.createElement('div');
-            container.className = 'button-container';
-            
-            // Replace the button with the container
-            button.parentNode.insertBefore(container, button);
-            container.appendChild(button);
-            
-            // Add the overlay
-            const overlay = document.createElement('div');
-            overlay.className = 'button-overlay';
-            if (hidden) {
-                overlay.style.display = 'none'; // Keep the overlay hidden
-            }
-            
-            // Create spinner
-            const spinner = document.createElement('span');
-            spinner.className = 'analysis-spinner';
-            overlay.appendChild(spinner);
-            
-            // Add the overlay to the container
-            container.appendChild(overlay);
-        }
+        // Update create cards button based on text selection
+        const hasSelection = state.selectedText && state.selectedText.length > 0;
+        generateButton.disabled = !hasSelection;
     }
     
     function clearAllCards() {
