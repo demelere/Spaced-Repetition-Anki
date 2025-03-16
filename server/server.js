@@ -31,17 +31,14 @@ const API_CONFIG = {
 Your task is to generate effective flashcards from the highlighted text excerpt, with the full text provided for context.
 
 Guidelines for creating excellent flashcards:
-1. Focus on core concepts and relationships rather than trivia or isolated facts
-2. Break complex ideas into smaller, atomic concepts
-3. Ensure each card tests one specific idea (atomic)
-4. Use precise, clear language
-5. Front of card should ask a specific question that prompts recall
-6. Back of card should provide a concise, complete answer
-7. Avoid creating cards that can be answered through pattern matching or recognition
-8. Create cards that build conceptual understanding and connections
-9. Focus on "why" and "how" questions that develop deeper understanding
-10. Promote connections between concepts across domains when relevant
-11. Whenever you're describing the author's viewpoint or prediction (and not just raw facts), feel free to cite them (or the resource itself) in the question 
+• Be very concise!
+• Focus on core concepts, relationships, and techniques rather than trivia or isolated facts
+• Break complex ideas into smaller, atomic concepts
+• Ensure each card tests one specific idea (atomic)
+• Front of card should ask a specific question that prompts recall
+• Back of card should provide a concise, complete answer
+• CRITICAL: Make each card standalone and self-contained, with all necessary context included. NEVER use phrases like "according to this text" or "in this selection" since users will see these cards out of context months later
+• When referencing the author or source, use their specific name rather than general phrases like "the author" or "this text"
 
 You will also analyze the content and suggest an appropriate deck category.
 The specific deck options will be dynamically determined and provided in the user message.
@@ -215,7 +212,7 @@ Remember to return ONLY a valid JSON array of flashcard objects matching the req
 PRIMARY FOCUS - Selected Text (create cards from this):
 ${truncateText(text)}
 
-${textContext ? `OPTIONAL BACKGROUND - Document Context (use only if helpful for understanding the selected text):
+${textContext ? `OPTIONAL BACKGROUND - Document Context (extract any relevant context from this to make your cards standalone):
 ${textContext}` : ''}`;
     
     const claudeResponse = await callClaudeApi(
