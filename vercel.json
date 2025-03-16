@@ -1,30 +1,3 @@
 {
-  "version": 2,
-  "functions": {
-    "api/*.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
-  "routes": [
-    { 
-      "src": "/api/(.*)", 
-      "headers": {
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,OPTIONS,PATCH,DELETE,POST,PUT",
-        "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
-      },
-      "continue": true
-    },
-    { "handle": "filesystem" },
-    { "src": "/api/health", "dest": "/api/health.js" },
-    { "src": "/api/analyze-text", "dest": "/api/analyze-text.js" },
-    { "src": "/api/generate-cards", "dest": "/api/generate-cards.js" },
-    { "src": "/api/mochi-decks", "dest": "/api/mochi-decks.js" },
-    { "src": "/api/upload-to-mochi", "dest": "/api/upload-to-mochi.js" },
-    { "src": "/api", "dest": "/api/index.js" },
-    { "src": "/favicon.ico", "dest": "/src/favicon.ico" },
-    { "src": "/(.*)", "dest": "/src/index.html" }
-  ]
+  "version": 2
 }

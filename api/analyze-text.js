@@ -1,5 +1,5 @@
 // Vercel serverless function for text analysis
-const fetch = require('node-fetch');
+const axios = require('axios');
 
 // Configuration
 const API_CONFIG = {
@@ -9,7 +9,7 @@ const API_CONFIG = {
   ANALYSIS_PROMPT: `You analyze text to extract key contextual information. Create a concise 1-2 paragraph summary that includes: the author/source if identifiable, the main thesis or argument, key points, and relevant background. This summary will serve as context for future interactions with sections of this text.`
 };
 
-// Helper function to truncate text to a reasonable size
+// Helper function to truncate text
 function truncateText(text, maxLength = 8000) {
   if (!text || text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '... [truncated]';
@@ -17,13 +17,13 @@ function truncateText(text, maxLength = 8000) {
 
 // Vercel serverless function handler
 module.exports = async (req, res) => {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  // Handle OPTIONS request
+  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -40,59 +40,58 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
     
-    // Use user-provided API key only
-    const apiKey = userApiKey;
-    
-    if (!apiKey) {
-      return res.status(400).json({ error: 'No API key provided. Please add your API key in settings.' });
+    if (!userApiKey) {
+      return res.status(400).json({ error: 'No API key provided. Please add your Claude API key in settings.' });
     }
     
     const truncatedText = truncateText(text, 10000);
     
-    const userPrompt = `Please analyze this text and provide a concise contextual summary (1-2 paragraphs maximum):
+    const payload = {
+      model: API_CONFIG.CLAUDE_MODEL,
+      system: API_CONFIG.ANALYSIS_PROMPT,
+      messages: [{ 
+        role: 'user', 
+        content: `Please analyze this text and provide a concise contextual summary (1-2 paragraphs maximum):\n\n${truncatedText}`
+      }],
+      max_tokens: 1000
+    };
 
-${truncatedText}`;
-    
-    // Set timeout for Vercel serverless functions
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000);
-
+    // Call Claude API with timeout
     try {
-      const payload = {
-        model: API_CONFIG.CLAUDE_MODEL,
-        system: API_CONFIG.ANALYSIS_PROMPT,
-        messages: [{ role: 'user', content: userPrompt }],
-        max_tokens: 1000
-      };
-
-      const response = await fetch(API_CONFIG.ANTHROPIC_API_URL, {
-        method: 'POST',
+      const response = await axios({
+        method: 'post',
+        url: API_CONFIG.ANTHROPIC_API_URL,
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey,
+          'x-api-key': userApiKey,
           'anthropic-version': API_CONFIG.ANTHROPIC_VERSION
         },
-        body: JSON.stringify(payload),
-        signal: controller.signal
+        data: payload,
+        timeout: 15000 // 15 second timeout
       });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        return res.status(500).json({ error: `Claude API Error: ${errorText}` });
-      }
-
-      const claudeResponse = await response.json();
-      return res.status(200).json(claudeResponse);
+      
+      return res.status(200).json(response.data);
     } catch (apiError) {
-      if (apiError.name === 'AbortError') {
-        return res.status(504).json({ error: 'Request timed out. Try a smaller text selection.' });
+      // Handle axios errors
+      if (apiError.code === 'ECONNABORTED') {
+        return res.status(504).json({ error: 'Request to Claude API timed out. Try a smaller text selection.' });
       }
-      throw apiError;
+      
+      if (apiError.response) {
+        // The request was made and the server responded with a non-2xx status
+        return res.status(apiError.response.status).json({ 
+          error: `Claude API Error: ${JSON.stringify(apiError.response.data)}`
+        });
+      } else if (apiError.request) {
+        // The request was made but no response was received
+        return res.status(500).json({ error: 'No response received from Claude API' });
+      } else {
+        // Something happened in setting up the request
+        return res.status(500).json({ error: `Error setting up request: ${apiError.message}` });
+      }
     }
   } catch (error) {
     console.error('Server error during text analysis:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: `Unexpected error: ${error.message}` });
   }
 };

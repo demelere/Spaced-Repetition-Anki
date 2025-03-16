@@ -1,15 +1,15 @@
 // Vercel serverless function for uploading cards to Mochi
-const fetch = require('node-fetch');
+const axios = require('axios');
 
 // Vercel serverless function handler
 module.exports = async (req, res) => {
-  // Enable CORS
-  res.setHeader('Access-Control-Allow-Credentials', true);
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
 
-  // Handle OPTIONS request
+  // Handle preflight requests
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -26,74 +26,71 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Cards array is required' });
     }
     
-    // Get Mochi API key from request only
-    const mochiApiKey = userMochiKey;
-    if (!mochiApiKey) {
+    if (!userMochiKey) {
       return res.status(400).json({ error: 'No Mochi API key provided. Please add your API key in settings.' });
     }
     
     console.log('Starting Mochi API upload');
     
     // Mochi uses HTTP Basic Auth with API key followed by colon
-    const base64ApiKey = Buffer.from(`${mochiApiKey}:`).toString('base64');
-    const authToken = `Basic ${base64ApiKey}`;
+    const authString = `${userMochiKey}:`;
+    const base64Auth = Buffer.from(authString).toString('base64');
     
     // Upload each card to Mochi
     const results = [];
     
     for (const card of cards) {
       try {
-        console.log('Uploading card to Mochi:', JSON.stringify({
-          'content': card.content.substring(0, 20) + '...',
-          'deck-id': card['deck-id']
-        }));
-        
-        // Set timeout for each card upload
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
+        // Log limited card info for debugging
+        const cardInfo = {
+          'content': card.content ? card.content.substring(0, 20) + '...' : 'No content',
+          'deck-id': card['deck-id'] || 'No deck ID'
+        };
+        console.log('Uploading card to Mochi:', JSON.stringify(cardInfo));
         
         try {
-          // Use HTTP Basic Auth header format
-          const response = await fetch('https://app.mochi.cards/api/cards/', {
-            method: 'POST',
+          // Make API request with axios
+          const response = await axios({
+            method: 'post',
+            url: 'https://app.mochi.cards/api/cards/',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': authToken
+              'Authorization': `Basic ${base64Auth}`
             },
-            body: JSON.stringify({
+            data: {
               'content': card.content,
               'deck-id': card['deck-id']
-            }),
-            signal: controller.signal
+            },
+            timeout: 5000 // 5 second timeout
           });
           
-          clearTimeout(timeoutId);
-          
-          const responseText = await response.text();
-          console.log('Mochi API response:', response.status, responseText.substring(0, 100));
-          
-          if (response.ok) {
-            let responseData;
-            try {
-              responseData = JSON.parse(responseText);
-              results.push({ success: true, id: responseData.id });
-            } catch (jsonError) {
-              console.error('Error parsing JSON response:', jsonError);
-              results.push({ success: true, response: responseText });
-            }
-          } else {
-            results.push({ success: false, error: responseText, status: response.status });
-          }
-        } catch (fetchError) {
-          if (fetchError.name === 'AbortError') {
+          // Successful response
+          results.push({ 
+            success: true, 
+            id: response.data?.id || 'unknown'
+          });
+        } catch (apiError) {
+          // Handle axios errors
+          if (apiError.code === 'ECONNABORTED') {
             results.push({ success: false, error: 'Upload timeout. Try again.' });
+          } else if (apiError.response) {
+            // The request was made and the server responded with a non-2xx status
+            results.push({ 
+              success: false, 
+              error: `Mochi API Error: ${JSON.stringify(apiError.response.data)}`, 
+              status: apiError.response.status 
+            });
+          } else if (apiError.request) {
+            // The request was made but no response was received
+            results.push({ success: false, error: 'No response received from Mochi API' });
           } else {
-            throw fetchError;
+            // Something happened in setting up the request
+            results.push({ success: false, error: `Error: ${apiError.message}` });
           }
         }
       } catch (cardError) {
-        console.error('Error uploading to Mochi:', cardError);
-        results.push({ success: false, error: cardError.message });
+        console.error('Error processing card for Mochi upload:', cardError);
+        results.push({ success: false, error: `Card processing error: ${cardError.message}` });
       }
     }
     
@@ -106,6 +103,6 @@ module.exports = async (req, res) => {
     
   } catch (error) {
     console.error('Server error during Mochi upload:', error);
-    return res.status(500).json({ error: error.message });
+    return res.status(500).json({ error: `Unexpected error: ${error.message}` });
   }
 };
