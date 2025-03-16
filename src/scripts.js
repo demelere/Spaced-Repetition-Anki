@@ -592,6 +592,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 // Show a subtle visual indicator that context is available
                 document.body.classList.add('has-document-context');
+                
+                // Show a non-disruptive notification that analysis is complete
+                showNotification('Text analysis complete. Card quality will be improved.', 'success', 4000);
             }
             
             state.fromPaste = false;
@@ -910,54 +913,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function clearAllCards() {
-        // Create modal confirmation
-        const modalOverlay = document.createElement('div');
-        modalOverlay.className = 'modal-overlay';
-        
-        const modalContent = document.createElement('div');
-        modalContent.className = 'modal-content';
-        
-        const modalHeader = document.createElement('h3');
-        modalHeader.textContent = 'Clear all cards?';
-        
-        const modalText = document.createElement('p');
-        modalText.textContent = 'This action cannot be undone.';
-        modalText.style.margin = '10px 0';
-        
-        const buttonContainer = document.createElement('div');
-        buttonContainer.className = 'modal-buttons';
-        
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Cancel';
-        cancelButton.className = 'modal-cancel';
-        cancelButton.addEventListener('click', () => {
-            document.body.removeChild(modalOverlay);
-        });
-        
-        const confirmButton = document.createElement('button');
-        confirmButton.textContent = 'Clear All';
-        confirmButton.className = 'modal-confirm';
-        confirmButton.style.backgroundColor = '#ea4335';
-        confirmButton.style.color = 'white';
-        confirmButton.style.borderColor = '#d93025';
-        
-        confirmButton.addEventListener('click', () => {
-            state.cards = [];
-            renderCards(); // This will hide the output panel and restore full height to editor
-            updateButtonStates();
-            document.body.removeChild(modalOverlay);
-            showNotification('All cards cleared', 'info');
-        });
-        
-        buttonContainer.appendChild(cancelButton);
-        buttonContainer.appendChild(confirmButton);
-        
-        modalContent.appendChild(modalHeader);
-        modalContent.appendChild(modalText);
-        modalContent.appendChild(buttonContainer);
-        
-        modalOverlay.appendChild(modalContent);
-        document.body.appendChild(modalOverlay);
+        // Simply clear all cards without confirmation
+        state.cards = [];
+        renderCards(); // This will hide the output panel and restore full height to editor
+        updateButtonStates();
+        showNotification('All cards cleared', 'info');
     }
     
     // clearAllQuestions function removed
