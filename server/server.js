@@ -115,22 +115,42 @@ async function callClaudeApi(systemPrompt, userPrompt, apiKey, maxTokens = 4000)
   console.log('USER PROMPT:', userPrompt.substring(0, 100) + '...');
   console.log('==============================\n');
 
-  const response = await fetch(API_CONFIG.ANTHROPIC_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': API_CONFIG.ANTHROPIC_VERSION
-    },
-    body: JSON.stringify(payload)
-  });
+  // Set timeout for Vercel serverless functions (10 seconds)
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); 
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(`Claude API Error: ${errorData.error?.message || 'Unknown error'}`);
+  try {
+    const response = await fetch(API_CONFIG.ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': API_CONFIG.ANTHROPIC_VERSION
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      let errorMessage = 'Unknown Claude API error';
+      try {
+        const errorData = await response.json();
+        errorMessage = errorData.error?.message || 'Unknown Claude API error';
+      } catch (e) {
+        errorMessage = await response.text() || 'Could not parse error response';
+      }
+      throw new Error(`Claude API Error: ${errorMessage}`);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('Claude API request timed out. Try again or use a smaller text selection.');
+    }
+    throw error;
   }
-
-  return response.json();
 }
 
 // Initialize Express app
@@ -270,20 +290,28 @@ app.get('/api/mochi-decks', async (req, res) => {
     const base64ApiKey = Buffer.from(`${mochiApiKey}:`).toString('base64');
     const authToken = `Basic ${base64ApiKey}`;
     
-    // Fetch decks from Mochi API
-    const response = await fetch('https://app.mochi.cards/api/decks/', {
-      method: 'GET',
-      headers: {
-        'Authorization': authToken
+    // Set timeout for Vercel serverless functions (5 seconds)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); 
+    
+    try {
+      // Fetch decks from Mochi API
+      const response = await fetch('https://app.mochi.cards/api/decks/', {
+        method: 'GET',
+        headers: {
+          'Authorization': authToken
+        },
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+    
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Mochi API Error: ${errorText}`);
       }
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Mochi API Error: ${errorText}`);
-    }
-    
-    const decksData = await response.json();
+      
+      const decksData = await response.json();
     
     // Transform data for client use
     const formattedDecks = {};
@@ -313,6 +341,13 @@ app.get('/api/mochi-decks', async (req, res) => {
       decks: formattedDecks,
       deckCount: activeDecksCount
     });
+    
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        throw new Error('Mochi API request timed out. Please try again.');
+      }
+      throw error;
+    }
     
   } catch (error) {
     console.error('Error fetching Mochi decks:', error);
@@ -428,7 +463,12 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, '../src/index.html'));
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Start server if not in Vercel serverless environment
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
+
+// Export the Express API for Vercel serverless deployment
+module.exports = app;
