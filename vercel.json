@@ -1,30 +1,31 @@
 {
   "version": 2,
-  "builds": [
+  "functions": {
+    "api/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
+  "headers": [
     {
-      "src": "api/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "src/**",
-      "use": "@vercel/static"
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Credentials", "value": "true" },
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,OPTIONS,PATCH,DELETE,POST,PUT" },
+        { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version" }
+      ]
     }
   ],
   "routes": [
-    { 
-      "src": "/api/(.*)", 
-      "dest": "/api/index.js",
-      "methods": ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-      "headers": {
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,OPTIONS,PATCH,DELETE,POST,PUT",
-        "Access-Control-Allow-Headers": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version"
-      }
-    },
-    { "src": "^/favicon.ico$", "dest": "/src/favicon.ico" },
-    { "src": "^/assets/(.*)", "dest": "/src/assets/$1" },
-    { "src": "^/(.*)\\.(js|css|svg|png|jpg|jpeg|gif|ico)$", "dest": "/src/$1.$2" },
+    { "handle": "filesystem" },
+    { "src": "/api/health", "dest": "/api/health.js" },
+    { "src": "/api/analyze-text", "dest": "/api/analyze-text.js" },
+    { "src": "/api/generate-cards", "dest": "/api/generate-cards.js" },
+    { "src": "/api/mochi-decks", "dest": "/api/mochi-decks.js" },
+    { "src": "/api/upload-to-mochi", "dest": "/api/upload-to-mochi.js" },
+    { "src": "/api", "dest": "/api/index.js" },
+    { "src": "/favicon.ico", "dest": "/src/favicon.ico" },
     { "src": "/(.*)", "dest": "/src/index.html" }
   ]
 }
