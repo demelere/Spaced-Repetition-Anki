@@ -260,9 +260,13 @@ async function generateCardsWithClaude(text, deckOptions = '', textContext = '')
       throw new Error('No Claude API key available. Please add your API key in settings.');
     }
     
-    // Call the server endpoint
+    // Call the server endpoint with timeout control
     let response;
     try {
+      // Create an AbortController to handle timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second client-side timeout
+      
       response = await fetch('/api/generate-cards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -271,9 +275,15 @@ async function generateCardsWithClaude(text, deckOptions = '', textContext = '')
           textContext,
           deckOptions,
           userApiKey: anthropicApiKey || null
-        })
+        }),
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
     } catch (fetchError) {
+      if (fetchError.name === 'AbortError') {
+        throw new Error(`Request timed out. Please select a smaller portion of text and try again.`);
+      }
       throw new Error(`Network error: Could not connect to the API server. ${fetchError.message}`);
     }
 

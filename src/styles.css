@@ -470,7 +470,7 @@ body.has-document-context .text-input {
 /* Add a subtle border to show selection status */
 .text-input.has-selection {
     outline: 2px solid var(--primary-light);
-    background-color: rgba(251, 237, 172, 0.1);
+    /* Removed yellow background color */
 }
 
 /* Custom Scrollbar */
@@ -1208,7 +1208,7 @@ body.has-document-context .text-input {
 
 /* Visual indication of selection */
 .text-input.has-selection .ql-editor {
-    background-color: rgba(251, 237, 172, 0.1);
+    /* Removed yellow background color */
     outline: 2px solid var(--primary-light);
 }
 

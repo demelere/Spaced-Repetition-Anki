@@ -655,7 +655,15 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification(`${cards.length} cards created successfully`, 'success');
         } catch (error) {
             console.error('Error generating cards:', error);
-            showNotification('Error generating cards: ' + (error.message || 'Please try again.'), 'error');
+            
+            // Provide a more specific message for timeout errors
+            if (error.message && error.message.includes('FUNCTION_INVOCATION_TIMEOUT')) {
+                showNotification('The request timed out. Please select a smaller portion of text and try again.', 'error');
+            } else if (error.message && error.message.includes('timed out')) {
+                showNotification('The request timed out. Please select a smaller portion of text and try again.', 'error');
+            } else {
+                showNotification('Error generating cards: ' + (error.message || 'Please try again.'), 'error');
+            }
         } finally {
             generateButton.disabled = false;
             generateButton.textContent = 'Create Cards';

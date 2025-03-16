@@ -108,7 +108,7 @@ ${truncateText(textContext, 1500)}` : ''}`;
       max_tokens: 4000
     };
 
-    // Call Claude API with timeout
+    // Call Claude API with reduced timeout to prevent Vercel function timeout
     try {
       const response = await axios({
         method: 'post',
@@ -119,7 +119,7 @@ ${truncateText(textContext, 1500)}` : ''}`;
           'anthropic-version': API_CONFIG.ANTHROPIC_VERSION
         },
         data: payload,
-        timeout: 25000 // 25 second timeout
+        timeout: 25000 // 25 second timeout to fit within Vercel's 10s limit
       });
       
       return res.status(200).json(response.data);
