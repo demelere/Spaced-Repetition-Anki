@@ -144,7 +144,9 @@ app.use(cors({
     'https://spaced-rep.vercel.app',
     'https://spaced-rep-ten.vercel.app',
     'https://pod-prep.com',
-    new RegExp(/https:\/\/spaced-.*\.vercel\.app/)
+    'https://www.generateflash.cards',
+    'https://generateflash.cards',
+    new RegExp(/https:\/\/.*\.vercel\.app/)
   ],
   credentials: true
 }));

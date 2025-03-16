@@ -185,27 +185,36 @@ async function analyzeTextWithClaude(text) {
     }
     
     // Call the server endpoint
-    const response = await fetch('/api/analyze-text', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: truncateText(text, 10000),
-        userApiKey: anthropicApiKey || null
-      })
-    });
-
-    if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch (e) {
-        const errorText = await response.text();
-        throw new Error(`API Error: ${errorText.substring(0, 100)}`);
-      }
-      throw new Error(`API Error: ${errorData.error || 'Unknown server error'}`);
+    let response;
+    try {
+      response = await fetch('/api/analyze-text', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: truncateText(text, 10000),
+          userApiKey: anthropicApiKey || null
+        })
+      });
+    } catch (fetchError) {
+      throw new Error(`Network error: Could not connect to the API server. ${fetchError.message}`);
     }
 
-    const data = await response.json();
+    // Read the response once as text
+    const responseText = await response.text();
+    
+    if (!response.ok) {
+      try {
+        // Try to parse as JSON
+        const errorData = JSON.parse(responseText);
+        throw new Error(`API Error: ${errorData.error || 'Unknown server error'}`);
+      } catch (e) {
+        // If parsing fails, use the text directly
+        throw new Error(`API Error: ${responseText.substring(0, 100)}`);
+      }
+    }
+
+    // Parse the already-read text as JSON
+    const data = JSON.parse(responseText);
     
     // Extract the context summary from Claude's response
     let contextSummary = '';
@@ -220,6 +229,14 @@ async function analyzeTextWithClaude(text) {
     return contextSummary;
   } catch (error) {
     console.error('Error analyzing text:', error);
+    
+    // Provide more user-friendly error messages
+    if (error.message.includes('No API key provided')) {
+      throw new Error('Please add your Claude API key in the settings (gear icon).');
+    } else if (error.message.includes('Network error')) {
+      throw new Error('Connection to server failed. Please check your internet connection and try again.');
+    }
+    
     throw error;
   }
 }
@@ -244,37 +261,50 @@ async function generateCardsWithClaude(text, deckOptions = '', textContext = '')
     }
     
     // Call the server endpoint
-    const response = await fetch('/api/generate-cards', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text: truncateText(text),
-        textContext,
-        deckOptions,
-        userApiKey: anthropicApiKey || null
-      })
-    });
-
-    if (!response.ok) {
-      let errorData;
-      try {
-        errorData = await response.json();
-      } catch (e) {
-        const errorText = await response.text();
-        throw new Error(`API Error: ${errorText.substring(0, 100)}`);
-      }
-      throw new Error(`API Error: ${errorData.error || 'Unknown server error'}`);
+    let response;
+    try {
+      response = await fetch('/api/generate-cards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: truncateText(text),
+          textContext,
+          deckOptions,
+          userApiKey: anthropicApiKey || null
+        })
+      });
+    } catch (fetchError) {
+      throw new Error(`Network error: Could not connect to the API server. ${fetchError.message}`);
     }
 
-    // Parse Claude's response to extract cards
-    const responseData = await response.json();
+    // Read the response once as text
+    const responseText = await response.text();
+    
+    if (!response.ok) {
+      try {
+        // Try to parse as JSON
+        const errorData = JSON.parse(responseText);
+        throw new Error(`API Error: ${errorData.error || 'Unknown server error'}`);
+      } catch (e) {
+        // If parsing fails, use the text directly
+        throw new Error(`API Error: ${responseText.substring(0, 100)}`);
+      }
+    }
+
+    // Parse the already-read text as JSON
+    const responseData = JSON.parse(responseText);
     return parseClaudeResponse(responseData);
   } catch (error) {
     console.error('Error calling API:', error);
     
-    // Check if this might be a CORS error
-    if (error.message && error.message.includes('Failed to fetch')) {
-      throw new Error('Network error: Unable to connect to the API service. This may be due to CORS restrictions or the server being unavailable.');
+    // Provide more user-friendly error messages
+    if (error.message.includes('No API key provided')) {
+      throw new Error('Please add your Claude API key in the settings (gear icon).');
+    } else if (error.message.includes('Network error') || error.message.includes('Failed to fetch')) {
+      throw new Error('Connection to server failed. Please check your internet connection and try again.');
+    } else if (error.message.includes('API Error') && error.message.length > 200) {
+      // Truncate very long error messages
+      throw new Error(error.message.substring(0, 200) + '...');
     }
     
     throw error;
