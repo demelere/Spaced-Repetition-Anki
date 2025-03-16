@@ -356,7 +356,7 @@ button.primary-action {
 .text-input {
     width: 100%;
     height: 100%;
-    padding: 20px;
+    padding: 0px;
     font-size: 16px;
     line-height: 1.6;
     color: var(--text-color);

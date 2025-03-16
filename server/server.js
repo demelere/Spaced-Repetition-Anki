@@ -1,4 +1,10 @@
-// Simple server for handling API requests with environment variables
+/**
+ * Flash Cards Generator API Server
+ * 
+ * Provides endpoints for generating flashcards using Claude API
+ * and integrating with Mochi Cards
+ */
+
 // Load .env file if present
 try {
   require('dotenv').config();
@@ -11,17 +17,127 @@ const cors = require('cors');
 const path = require('path');
 const fetch = require('node-fetch');
 
-// Helper function to truncate text to a reasonable size to reduce payload
+// Import shared constants and helpers from a server-side module
+// that mirrors the client-side API_CONFIG
+const API_CONFIG = {
+  // Claude API settings
+  ANTHROPIC_API_URL: "https://api.anthropic.com/v1/messages",
+  CLAUDE_MODEL: "claude-3-7-sonnet-20250219",
+  ANTHROPIC_VERSION: "2023-06-01",
+  
+  // System prompts for various functionalities
+  PROMPTS: {
+    CARDS: `You are an expert in creating high-quality spaced repetition flashcards. 
+Your task is to generate effective flashcards from the highlighted text excerpt, with the full text provided for context.
+
+Guidelines for creating excellent flashcards:
+1. Focus on core concepts and relationships rather than trivia or isolated facts
+2. Break complex ideas into smaller, atomic concepts
+3. Ensure each card tests one specific idea (atomic)
+4. Use precise, clear language
+5. Front of card should ask a specific question that prompts recall
+6. Back of card should provide a concise, complete answer
+7. Avoid creating cards that can be answered through pattern matching or recognition
+8. Create cards that build conceptual understanding and connections
+9. Focus on "why" and "how" questions that develop deeper understanding
+10. Promote connections between concepts across domains when relevant
+11. Whenever you're describing the author's viewpoint or prediction (and not just raw facts), feel free to cite them (or the resource itself) in the question 
+
+You will also analyze the content and suggest an appropriate deck category.
+The specific deck options will be dynamically determined and provided in the user message.
+
+CRITICAL: You MUST ALWAYS output your response as a valid JSON array of card objects. NEVER provide any prose, explanation or markdown formatting.
+
+Each card object must have the following structure:
+
+{
+  "front": "The question or prompt text goes here",
+  "back": "The answer or explanation text goes here",
+  "deck": "One of the deck categories listed above"
+}
+
+Example of expected JSON format:
+
+[
+  {
+    "front": "What is the primary function of X?",
+    "back": "X primarily functions to do Y by using mechanism Z.",
+    "deck": "CS/Hardware"
+  },
+  {
+    "front": "Why is concept A important in the context of B?",
+    "back": "Concept A is crucial because it enables process C and prevents problem D.",
+    "deck": "Math/Physics"
+  }
+]
+
+Generate between 1-5 cards depending on the complexity and amount of content in the highlighted text.
+Your response MUST BE ONLY valid JSON - no introduction, no explanation, no markdown formatting.`,
+
+    ANALYSIS: `You analyze text to extract key contextual information. Create a concise 1-2 paragraph summary that includes: the author/source if identifiable, the main thesis or argument, key points, and relevant background. This summary will serve as context for future interactions with sections of this text.`
+  }
+};
+
+/**
+ * Helper function to truncate text to a reasonable size
+ * @param {string} text - Text to truncate
+ * @param {number} maxLength - Maximum length
+ * @returns {string} Truncated text
+ */
 function truncateText(text, maxLength = 8000) {
   if (!text || text.length <= maxLength) return text;
   return text.substring(0, maxLength) + '... [truncated]';
 }
 
+/**
+ * Helper to call Claude API with consistent options
+ * @param {string} systemPrompt - System prompt
+ * @param {string} userPrompt - User prompt
+ * @param {string} apiKey - Claude API key
+ * @param {number} maxTokens - Maximum tokens for response
+ * @returns {Promise<Object>} Claude API response
+ */
+async function callClaudeApi(systemPrompt, userPrompt, apiKey, maxTokens = 4000) {
+  if (!apiKey) {
+    throw new Error('API key not configured. Please provide a Claude API key.');
+  }
 
+  const payload = {
+    model: API_CONFIG.CLAUDE_MODEL,
+    system: systemPrompt,
+    messages: [{ role: 'user', content: userPrompt }],
+    max_tokens: maxTokens
+  };
+
+  // Log the request for debugging
+  console.log(`\n===== CLAUDE API REQUEST =====`);
+  console.log('SYSTEM:', systemPrompt.substring(0, 100) + '...');
+  console.log('USER PROMPT:', userPrompt.substring(0, 100) + '...');
+  console.log('==============================\n');
+
+  const response = await fetch(API_CONFIG.ANTHROPIC_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': API_CONFIG.ANTHROPIC_VERSION
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(`Claude API Error: ${errorData.error?.message || 'Unknown error'}`);
+  }
+
+  return response.json();
+}
+
+// Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// Configure middleware
 app.use(cors({
   origin: [
     'http://localhost:3000', 
@@ -37,7 +153,6 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../src')));
 
 // Add middleware to expose environment variables to client
-// Only expose MOCHI_API_KEY but NOT the actual key value
 app.use((req, res, next) => {
   res.locals.envVars = {
     hasMochiApiKey: !!process.env.MOCHI_API_KEY
@@ -45,8 +160,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// API endpoint for Claude to generate cards
-// API endpoint for initial text analysis
+// CLAUDE API ENDPOINTS
+
+// API endpoint for text analysis
 app.post('/api/analyze-text', async (req, res) => {
   try {
     const { text, userApiKey } = req.body;
@@ -57,59 +173,27 @@ app.post('/api/analyze-text', async (req, res) => {
     
     // Use user-provided API key if available, otherwise fall back to environment variable
     const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'API key not configured. Please provide a Claude API key.' });
-    }
-    
-    // Truncate text if extremely long
     const truncatedText = truncateText(text, 10000);
     
-    // Create the request payload
-    const analyzePayload = {
-      model: 'claude-3-7-sonnet-20250219',
-      system: 'You analyze text to extract key contextual information. Create a concise 1-2 paragraph summary that includes: the author/source if identifiable, the main thesis or argument, key points, and relevant background. This summary will serve as context for future interactions with sections of this text.',
-      messages: [
-        {
-          role: 'user',
-          content: `Please analyze this text and provide a concise contextual summary (1-2 paragraphs maximum):
+    const userPrompt = `Please analyze this text and provide a concise contextual summary (1-2 paragraphs maximum):
 
-${truncatedText}`
-        }
-      ],
-      max_tokens: 1000
-    };
+${truncatedText}`;
     
-    // Print the EXACT string that Anthropic will see
-    console.log('\n===== EXACT ANTHROPIC ANALYSIS PROMPT =====');
-    console.log('SYSTEM PROMPT:', analyzePayload.system);
-    console.log('\nUSER PROMPT:', analyzePayload.messages[0].content);
-    console.log('============================================\n');
+    const claudeResponse = await callClaudeApi(
+      API_CONFIG.PROMPTS.ANALYSIS, 
+      userPrompt, 
+      apiKey, 
+      1000
+    );
     
-    // Call Claude API
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify(analyzePayload)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Claude API Error: ${errorData.error?.message || 'Unknown error'}`);
-    }
-    
-    const claudeResponse = await response.json();
     res.json(claudeResponse);
-    
   } catch (error) {
     console.error('Server error during text analysis:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
+// API endpoint for generating flashcards
 app.post('/api/generate-cards', async (req, res) => {
   try {
     const { text, textContext, deckOptions, userApiKey } = req.body;
@@ -120,66 +204,8 @@ app.post('/api/generate-cards', async (req, res) => {
     
     // Use user-provided API key if available, otherwise fall back to environment variable
     const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'API key not configured. Please provide a Claude API key.' });
-    }
     
-    // Claude system prompt
-    const systemPrompt = `You are an expert in creating high-quality spaced repetition flashcards. 
-    Your task is to generate effective flashcards from the highlighted text excerpt, with the full text provided for context.
-    
-    Guidelines for creating excellent flashcards:
-    1. Focus on core concepts and relationships rather than trivia or isolated facts
-    2. Break complex ideas into smaller, atomic concepts
-    3. Ensure each card tests one specific idea (atomic)
-    4. Use precise, clear language
-    5. Front of card should ask a specific question that prompts recall
-    6. Back of card should provide a concise, complete answer
-    7. Avoid creating cards that can be answered through pattern matching or recognition
-    8. Create cards that build conceptual understanding and connections
-    9. Focus on "why" and "how" questions that develop deeper understanding
-    10. Promote connections between concepts across domains when relevant
-    11. Whenever you're describing the author's viewpoint or prediction (and not just raw facts), feel free to cite them (or the resource itself) in the question 
-    
-    You will also analyze the content and suggest an appropriate deck category.
-    The specific deck options will be dynamically determined and provided in the user message.
-    
-    CRITICAL: You MUST ALWAYS output your response as a valid JSON array of card objects. NEVER provide any prose, explanation or markdown formatting.
-    
-    Each card object must have the following structure:
-    
-    {
-      "front": "The question or prompt text goes here",
-      "back": "The answer or explanation text goes here",
-      "deck": "One of the deck categories listed above"
-    }
-    
-    Example of expected JSON format:
-    
-    [
-      {
-        "front": "What is the primary function of X?",
-        "back": "X primarily functions to do Y by using mechanism Z.",
-        "deck": "CS/Hardware"
-      },
-      {
-        "front": "Why is concept A important in the context of B?",
-        "back": "Concept A is crucial because it enables process C and prevents problem D.",
-        "deck": "Math/Physics"
-      }
-    ]
-    
-    Generate between 1-5 cards depending on the complexity and amount of content in the highlighted text.
-    Your response MUST BE ONLY valid JSON - no introduction, no explanation, no markdown formatting.`;
-    
-    // Create the request payload
-    const cardsPayload = {
-      model: 'claude-3-7-sonnet-20250219',
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: `Please create spaced repetition flashcards from the SELECTED TEXT below.
+    const userPrompt = `Please create spaced repetition flashcards from the SELECTED TEXT below.
 Use the guidelines from the system prompt.
 
 Available deck categories: ${deckOptions || Object.keys(req.body.deckMap || {}).join(', ') || "General"}
@@ -190,35 +216,14 @@ PRIMARY FOCUS - Selected Text (create cards from this):
 ${truncateText(text)}
 
 ${textContext ? `OPTIONAL BACKGROUND - Document Context (use only if helpful for understanding the selected text):
-${textContext}` : ''}`
-        }
-      ],
-      max_tokens: 4000
-    };
+${textContext}` : ''}`;
     
-    // Print the EXACT string that Anthropic will see
-    console.log('\n===== EXACT ANTHROPIC PROMPT =====');
-    console.log('SYSTEM PROMPT:', systemPrompt);
-    console.log('\nUSER PROMPT:', cardsPayload.messages[0].content);
-    console.log('==================================\n');
-    
-    // Call Claude API
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify(cardsPayload)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Claude API Error: ${errorData.error?.message || 'Unknown error'}`);
-    }
-    
-    const claudeResponse = await response.json();
+    const claudeResponse = await callClaudeApi(
+      API_CONFIG.PROMPTS.CARDS, 
+      userPrompt, 
+      apiKey, 
+      4000
+    );
     
     // Log the response for debugging
     console.log('Claude API response structure:', Object.keys(claudeResponse));
@@ -226,131 +231,15 @@ ${textContext}` : ''}`
       console.log('Content types:', claudeResponse.content.map(item => item.type).join(', '));
     }
     
-    // Send the raw response back to client
-    // Client-side parsing will handle the rest
     res.json(claudeResponse);
-    
   } catch (error) {
-    console.error('Server error:', error);
+    console.error('Server error during card generation:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
-// API endpoint for generating interview questions
-app.post('/api/generate-questions', async (req, res) => {
-  try {
-    const { text, textContext, userApiKey } = req.body;
-    
-    if (!text) {
-      return res.status(400).json({ error: 'Text is required' });
-    }
-    
-    // Use user-provided API key if available, otherwise fall back to environment variable
-    const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      return res.status(500).json({ error: 'API key not configured. Please provide a Claude API key.' });
-    }
-    
-    // Claude system prompt for generating podcast interview questions in Tyler Cowen's style
-    const systemPrompt = `You are Tyler Cowen, the brilliant economist and host of "Conversations with Tyler," preparing to interview an expert based on a text excerpt they've written. You're known for your wide-ranging intellect, unexpected connections, and ability to ask questions that reveal new ideas rather than simply rehashing what's already been said.
 
-    Guidelines for creating Tyler Cowen-style interview questions:
-    1. Go beyond the text - don't ask questions that are directly answered in the text
-    2. Make unexpected connections to other fields, disciplines, and thinkers
-    3. Identify potential contradictions or tensions in the author's thinking that would yield interesting responses
-    4. Generate questions that draw on your encyclopedic knowledge of economics, history, literature, and culture
-    5. Ask about implications the author may not have considered
-    6. Pose "thought experiments" that push the author's ideas into new territory
-    7. Inquire about contrarian takes that challenge the author's assumptions
-    8. Reference adjacent thinkers or competing ideas for comparative discussion
-    9. Ask about methodology, empirical evidence, or how the author would respond to specific counterexamples
-    10. Demonstrate deep background knowledge of the topic that would surprise the author
-    
-    CRITICAL: You MUST ALWAYS output your response as a valid JSON array of question objects. NEVER provide any prose, explanation or markdown formatting.
-    
-    Each question object must have the following structure:
-    
-    {
-      "question": "The complete interview question goes here. Make it standalone without requiring additional context.",
-      "topic": "A short topic label (1-3 words) to categorize this question"
-    }
-    
-    Example of expected JSON format:
-    
-    [
-      {
-        "question": "If we apply Coasean bargaining to your framework of distributed cognition, doesn't that undermine your conclusion about the need for centralized coordination? What would Ronald Coase say about your approach?",
-        "topic": "Economic Theory"
-      },
-      {
-        "question": "You seem to implicitly adopt a Hayekian view of distributed knowledge, yet your policy recommendations lean toward centralization. How do you reconcile these seemingly contrary positions?",
-        "topic": "Policy Tensions"
-      },
-      {
-        "question": "The late David Graeber might argue your framework reinforces existing power structures. How would you respond to anthropological critiques that view your model as maintaining rather than challenging institutional hierarchies?",
-        "topic": "Power Dynamics"
-      }
-    ]
-    
-    Generate between 3-8 questions depending on the complexity of the highlighted text. Demonstrate broad knowledge that extends far beyond what's in the text itself.
-    Your response MUST BE ONLY valid JSON - no introduction, no explanation, no markdown formatting.`;
-    
-    // Create the request payload
-    const questionsPayload = {
-      model: 'claude-3-7-sonnet-20250219',
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: `Please create podcast interview questions based on the SELECTED TEXT below.
-Use the guidelines from the system prompt.
-
-Remember to return ONLY a valid JSON array of question objects matching the required format.
-
-PRIMARY FOCUS - Selected Text (create questions from this):
-${truncateText(text)}
-
-${textContext ? `OPTIONAL BACKGROUND - Document Context (use only if helpful for understanding the selected text):
-${textContext}` : ''}`
-        }
-      ],
-      max_tokens: 4000
-    };
-    
-    // Print the EXACT string that Anthropic will see
-    console.log('\n===== EXACT ANTHROPIC QUESTION PROMPT =====');
-    console.log('SYSTEM PROMPT:', systemPrompt);
-    console.log('\nUSER PROMPT:', questionsPayload.messages[0].content);
-    console.log('============================================\n');
-    
-    // Call Claude API
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify(questionsPayload)
-    });
-    
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`Claude API Error: ${errorData.error?.message || 'Unknown error'}`);
-    }
-    
-    const claudeResponse = await response.json();
-    
-    // Send the raw response back to client
-    res.json(claudeResponse);
-    
-  } catch (error) {
-    console.error('Server error:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Chat endpoint removed
+// MOCHI API ENDPOINTS
 
 // API endpoint to fetch decks from Mochi
 app.get('/api/mochi-decks', async (req, res) => {
@@ -448,7 +337,6 @@ app.post('/api/upload-to-mochi', async (req, res) => {
     console.log('Starting Mochi API upload');
     
     // Mochi uses HTTP Basic Auth with API key followed by colon
-    // Format: "Basic " + base64(apiKey + ":")
     const base64ApiKey = Buffer.from(`${mochiApiKey}:`).toString('base64');
     const authToken = `Basic ${base64ApiKey}`;
     
@@ -508,6 +396,8 @@ app.post('/api/upload-to-mochi', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// UTILITY ENDPOINTS
 
 // Health check route for Vercel
 app.get('/api/health', (req, res) => {
