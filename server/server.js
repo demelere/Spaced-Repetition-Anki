@@ -5,12 +5,15 @@
  * and integrating with Mochi Cards
  */
 
-// Load .env file if present
+// Load .env file if present (for local development only)
 try {
   require('dotenv').config();
 } catch (e) {
-  console.log('dotenv not installed, using process.env directly');
+  console.log('dotenv not installed, continuing without it');
 }
+
+// Note: This application uses client-side API keys passed with each request
+// rather than storing them in environment variables
 
 const express = require('express');
 const cors = require('cors');
@@ -149,11 +152,9 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, '../src')));
 
-// Add middleware to expose environment variables to client
+// Add middleware for request logging
 app.use((req, res, next) => {
-  res.locals.envVars = {
-    hasMochiApiKey: !!process.env.MOCHI_API_KEY
-  };
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
 
@@ -168,8 +169,13 @@ app.post('/api/analyze-text', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
     
-    // Use user-provided API key if available, otherwise fall back to environment variable
-    const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
+    // Use user-provided API key only
+    const apiKey = userApiKey;
+    
+    if (!apiKey) {
+      return res.status(400).json({ error: 'No API key provided. Please add your API key in settings.' });
+    }
+    
     const truncatedText = truncateText(text, 10000);
     
     const userPrompt = `Please analyze this text and provide a concise contextual summary (1-2 paragraphs maximum):
@@ -186,7 +192,9 @@ ${truncatedText}`;
     res.json(claudeResponse);
   } catch (error) {
     console.error('Server error during text analysis:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message
+    });
   }
 });
 
@@ -199,8 +207,12 @@ app.post('/api/generate-cards', async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
     
-    // Use user-provided API key if available, otherwise fall back to environment variable
-    const apiKey = userApiKey || process.env.ANTHROPIC_API_KEY;
+    // Use user-provided API key only
+    const apiKey = userApiKey;
+    
+    if (!apiKey) {
+      return res.status(400).json({ error: 'No API key provided. Please add your API key in settings.' });
+    }
     
     const userPrompt = `Please create spaced repetition flashcards from the SELECTED TEXT below.
 Use the guidelines from the system prompt.
@@ -231,7 +243,9 @@ ${textContext}` : ''}`;
     res.json(claudeResponse);
   } catch (error) {
     console.error('Server error during card generation:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ 
+      error: error.message
+    });
   }
 });
 
@@ -241,11 +255,11 @@ ${textContext}` : ''}`;
 // API endpoint to fetch decks from Mochi
 app.get('/api/mochi-decks', async (req, res) => {
   try {
-    // Get Mochi API key from query parameter or environment
-    const mochiApiKey = req.query.userMochiKey || process.env.MOCHI_API_KEY;
+    // Get Mochi API key from query parameter only
+    const mochiApiKey = req.query.userMochiKey;
     if (!mochiApiKey) {
-      return res.status(500).json({ 
-        error: 'Mochi API key not configured',
+      return res.status(400).json({ 
+        error: 'No Mochi API key provided. Please add your API key in settings.',
         fallbackDecks: { "General": "general" }
       });
     }
@@ -309,10 +323,12 @@ app.get('/api/mochi-decks', async (req, res) => {
   }
 });
 
-// API endpoint to check environment status
-app.get('/api/env-status', (req, res) => {
+// API endpoint to check server status
+app.get('/api/server-status', (req, res) => {
   res.json({
-    hasMochiApiKey: !!process.env.MOCHI_API_KEY
+    status: 'ok',
+    clientKeys: true, // This app uses client-side keys, not server environment variables
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -325,10 +341,10 @@ app.post('/api/upload-to-mochi', async (req, res) => {
       return res.status(400).json({ error: 'Cards array is required' });
     }
     
-    // Get Mochi API key from request or environment
-    const mochiApiKey = userMochiKey || process.env.MOCHI_API_KEY;
+    // Get Mochi API key from request only
+    const mochiApiKey = userMochiKey;
     if (!mochiApiKey) {
-      return res.status(500).json({ error: 'Mochi API key not configured' });
+      return res.status(400).json({ error: 'No Mochi API key provided. Please add your API key in settings.' });
     }
     
     console.log('Starting Mochi API upload');
@@ -398,7 +414,11 @@ app.post('/api/upload-to-mochi', async (req, res) => {
 
 // Health check route for Vercel
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    message: 'API server is running. Remember to add your API keys in the settings.'
+  });
 });
 
 // Serve the main app

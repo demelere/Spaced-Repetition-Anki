@@ -179,6 +179,11 @@ async function analyzeTextWithClaude(text) {
     // Get stored API key
     const { anthropicApiKey } = getStoredApiKeys();
     
+    // Check if we have an API key
+    if (!anthropicApiKey) {
+      throw new Error('No Claude API key available. Please add your API key in settings.');
+    }
+    
     // Call the server endpoint
     const response = await fetch('/api/analyze-text', {
       method: 'POST',
@@ -190,8 +195,14 @@ async function analyzeTextWithClaude(text) {
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`API Error: ${errorData.error || 'Unknown error'}`);
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        const errorText = await response.text();
+        throw new Error(`API Error: ${errorText.substring(0, 100)}`);
+      }
+      throw new Error(`API Error: ${errorData.error || 'Unknown server error'}`);
     }
 
     const data = await response.json();
@@ -227,6 +238,11 @@ async function generateCardsWithClaude(text, deckOptions = '', textContext = '')
     // Get stored API key
     const { anthropicApiKey } = getStoredApiKeys();
     
+    // Check if we have an API key
+    if (!anthropicApiKey) {
+      throw new Error('No Claude API key available. Please add your API key in settings.');
+    }
+    
     // Call the server endpoint
     const response = await fetch('/api/generate-cards', {
       method: 'POST',
@@ -240,12 +256,19 @@ async function generateCardsWithClaude(text, deckOptions = '', textContext = '')
     });
 
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(`API Error: ${errorData.error || 'Unknown error'}`);
+      let errorData;
+      try {
+        errorData = await response.json();
+      } catch (e) {
+        const errorText = await response.text();
+        throw new Error(`API Error: ${errorText.substring(0, 100)}`);
+      }
+      throw new Error(`API Error: ${errorData.error || 'Unknown server error'}`);
     }
 
     // Parse Claude's response to extract cards
-    return parseClaudeResponse(await response.json());
+    const responseData = await response.json();
+    return parseClaudeResponse(responseData);
   } catch (error) {
     console.error('Error calling API:', error);
     
