@@ -1116,6 +1116,106 @@ body.has-document-context .text-input {
     display: none;
 }
 
+/* Quill Editor Styles */
+/* Ensure Quill has proper height */
+.text-input {
+    height: 100%;
+}
+
+/* Style the Quill container to take up full height */
+.ql-container.ql-snow {
+    height: calc(100% - 42px); /* Account for toolbar height */
+    overflow: auto;
+    border: none;
+    font-family: var(--font-main);
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+/* Style the toolbar */
+.ql-toolbar.ql-snow {
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    border-bottom: 1px solid var(--gray-300);
+    background-color: var(--gray-50);
+    padding: 8px 20px;
+}
+
+/* Style the editor content area */
+.ql-editor {
+    min-height: 100%;
+    padding: 20px;
+    font-family: var(--font-main);
+    color: var(--text-color);
+}
+
+/* Customizing selection */
+.ql-editor ::selection {
+    background-color: var(--highlight-color);
+}
+
+/* Style headings */
+.ql-editor h1 {
+    font-size: 1.5em;
+    margin-top: 1.2em;
+    margin-bottom: 0.6em;
+    font-weight: 600;
+}
+
+.ql-editor h2 {
+    font-size: 1.3em;
+    margin-top: 1.2em;
+    margin-bottom: 0.6em;
+    font-weight: 600;
+}
+
+.ql-editor h3 {
+    font-size: 1.2em;
+    margin-top: 1.2em;
+    margin-bottom: 0.6em;
+    font-weight: 600;
+}
+
+/* Style lists */
+.ql-editor ul,
+.ql-editor ol {
+    padding-left: 1.5em;
+    margin: 0.7em 0;
+}
+
+.ql-editor ul > li {
+    list-style-type: disc;
+    margin-bottom: 0.4em;
+}
+
+.ql-editor ol > li {
+    list-style-type: decimal;
+    margin-bottom: 0.4em;
+}
+
+/* Style blockquotes */
+.ql-editor blockquote {
+    border-left: 3px solid var(--primary-light);
+    margin-left: 0;
+    padding: 0.5em 0 0.5em 1em;
+    color: var(--gray-700);
+    background-color: var(--gray-50);
+    border-radius: 0 4px 4px 0;
+}
+
+/* Visual indication of selection */
+.text-input.has-selection .ql-editor {
+    background-color: rgba(251, 237, 172, 0.1);
+    outline: 2px solid var(--primary-light);
+}
+
+/* Make placeholder text more visible */
+.ql-editor.ql-blank::before {
+    color: var(--gray-500);
+    font-style: italic;
+}
+
 /* API Key Management */
 .api-key-overlay {
     position: fixed;

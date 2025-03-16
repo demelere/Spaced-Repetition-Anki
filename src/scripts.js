@@ -8,6 +8,8 @@ import {
     hasApiKeys
 } from './claude-api.js';
 
+// Quill.js is loaded globally from CDN
+
 document.addEventListener('DOMContentLoaded', () => {
     // API Key Management
     const apiKeyModal = document.getElementById('apiKeyModal');
@@ -168,8 +170,99 @@ document.addEventListener('DOMContentLoaded', () => {
         decks: {},
         documentContext: '',
         isAnalyzing: false,
-        fromPaste: false
+        fromPaste: false,
+        editor: null
     };
+    
+    // Initialize Quill Editor
+    function initQuillEditor() {
+        try {
+            // Configure Quill with the modules and formats we want
+            const toolbarOptions = [
+                [{ 'header': [1, 2, 3, false] }],
+                ['bold', 'italic'],
+                [{ 'list': 'ordered'}, { 'list': 'bullet' }]
+            ];
+            
+            // Create a new Quill editor instance
+            state.editor = new Quill('#textInput', {
+                modules: {
+                    toolbar: toolbarOptions
+                },
+                placeholder: 'Paste or type your text here, then highlight sections to generate cards...',
+                theme: 'snow'
+            });
+            
+            // Handle text change events
+            state.editor.on('text-change', function() {
+                // Clear any existing timeout
+                if (textChangeTimeout) {
+                    clearTimeout(textChangeTimeout);
+                }
+                
+                // Set a new timeout to analyze text after typing stops
+                textChangeTimeout = setTimeout(() => {
+                    // Get text content from the editor
+                    const fullText = state.editor.getText();
+                    if (fullText.trim().length > 100 && !state.isAnalyzing) {
+                        analyzeDocumentContext(fullText);
+                    }
+                }, 1500);
+            });
+            
+            // Handle selection change events
+            state.editor.on('selection-change', function(range) {
+                if (range) {
+                    if (range.length > 0) {
+                        // We have a selection
+                        const selectedText = state.editor.getText(range.index, range.length);
+                        
+                        // Store selected text in state
+                        state.selectedText = selectedText.trim();
+                        
+                        // Enable generate button
+                        generateButton.disabled = false;
+                        
+                        // Show visual indication
+                        textInput.classList.add('has-selection');
+                    } else {
+                        // Cursor changed position but no selection
+                        state.selectedText = '';
+                        generateButton.disabled = true;
+                        textInput.classList.remove('has-selection');
+                    }
+                } else {
+                    // Editor lost focus
+                    state.selectedText = '';
+                    textInput.classList.remove('has-selection');
+                }
+            });
+            
+            console.log('Quill editor initialized');
+        } catch (error) {
+            console.error('Error initializing Quill editor:', error);
+        }
+    }
+    
+    // Handle selection for fallback editor
+    function handleEditorSelection() {
+        const selection = window.getSelection();
+        const selectedText = selection.toString().trim();
+        
+        // Store selected text in state
+        state.selectedText = selectedText;
+        
+        // Enable/disable buttons based on selection
+        const hasSelection = selectedText.length > 0;
+        generateButton.disabled = !hasSelection;
+        
+        // Show a visual indication of selection
+        if (hasSelection) {
+            textInput.classList.add('has-selection');
+        } else {
+            textInput.classList.remove('has-selection');
+        }
+    }
     
     // Fetch decks from Mochi API
     async function fetchDecks() {
@@ -331,35 +424,59 @@ document.addEventListener('DOMContentLoaded', () => {
     exportButton.addEventListener('click', exportToMochi);
     clearCardsButton.addEventListener('click', clearAllCards);
     
-    // Add plain text paste handlers
-    textInput.addEventListener('paste', handlePaste);
-    
-    // Monitor text changes to automatically analyze document
+    // Initialize Quill editor
     let textChangeTimeout = null;
-    textInput.addEventListener('input', () => {
-        // Clear any existing timeout
-        if (textChangeTimeout) {
-            clearTimeout(textChangeTimeout);
-        }
+    try {
+        // Initialize the Quill editor
+        initQuillEditor();
         
-        // Set a new timeout to analyze text after typing stops (1.5 second delay)
-        textChangeTimeout = setTimeout(() => {
-            const fullText = textInput.textContent || '';
-            if (fullText.trim().length > 100 && !state.isAnalyzing) {
-                analyzeDocumentContext(fullText);
+        // Quill handles paste events automatically
+        // We'll analyze text after paste in the text-change handler
+    } catch (error) {
+        console.error('Failed to initialize Quill editor, falling back to basic contenteditable', error);
+        // Fallback to basic contenteditable if Quill fails
+        textInput.setAttribute('contenteditable', 'true');
+        textInput.setAttribute('placeholder', 'Paste or type your text here, then highlight sections to generate cards...');
+        
+        // Add basic event listeners
+        textInput.addEventListener('mouseup', handleEditorSelection);
+        textInput.addEventListener('keyup', handleEditorSelection);
+        textInput.addEventListener('input', () => {
+            // Clear any existing timeout
+            if (textChangeTimeout) {
+                clearTimeout(textChangeTimeout);
             }
-        }, 1500);
-    });
+            
+            // Set a new timeout to analyze text after typing stops
+            textChangeTimeout = setTimeout(() => {
+                const fullText = textInput.textContent || '';
+                if (fullText.trim().length > 100 && !state.isAnalyzing) {
+                    analyzeDocumentContext(fullText);
+                }
+            }, 1500);
+        });
+        
+        // Add plain text paste handler for fallback
+        textInput.addEventListener('paste', async function(e) {
+            // Prevent the default paste behavior
+            e.preventDefault();
+            
+            // Get plain text from clipboard
+            const text = e.clipboardData.getData('text/plain');
+            
+            // Insert it at the cursor position using the standard command
+            document.execCommand('insertText', false, text);
+            
+            // If text is long enough, analyze it immediately
+            if (text.length > 100) {
+                state.fromPaste = true;
+                await analyzeDocumentContext(text);
+            }
+        });
+    }
     
-    // Monitor text selection
-    textInput.addEventListener('mouseup', handleTextSelection);
-    textInput.addEventListener('keyup', handleTextSelection);
-    
-    // Periodic check for selections (helps with some edge cases)
-    setInterval(handleTextSelection, 500);
-
-    // Enable the button if there's already text in the selection
-    handleTextSelection();
+    // Enable the button if there's already text in the selection (Quill handles this now)
+    // handleTextSelection() is now replaced by Quill's selection-change event
     
     // Initialize UI and fetch decks
     updateButtonStates();
@@ -451,32 +568,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: false });
     
     // Functions
-    async function handlePaste(e) {
-        // Prevent the default paste behavior
-        e.preventDefault();
-        
-        // Get plain text from clipboard
-        if (e.clipboardData && e.clipboardData.getData) {
-            // Get the plain text
-            const text = e.clipboardData.getData('text/plain');
-            
-            // Insert it at the cursor position using the standard command
-            document.execCommand('insertText', false, text);
-            
-            // Clear any selection state
-            clearAllHighlights();
-            
-            // Update the UI after a short delay
-            setTimeout(handleTextSelection, 50);
-            
-            // If text is long enough, analyze it immediately 
-            if (text.length > 100) {
-                state.fromPaste = true;
-                await analyzeDocumentContext(text);
-            }
-        }
-    }
-    
     // Analyze text to extract context summary when text is pasted
     async function analyzeDocumentContext(text) {
         if (!text || text.trim().length < 100 || state.isAnalyzing) {
@@ -516,31 +607,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
     
-    // Function to clear all highlights - super simplified approach
+    // Function to clear all highlights - adapted for Quill
     function clearAllHighlights() {
-        // Just remove the selection class - no DOM manipulation needed
+        // Remove the selection class
         textInput.classList.remove('has-selection');
         
-        // Clear any selection in the window
-        window.getSelection().removeAllRanges();
-    }
-    
-    function handleTextSelection() {
-        const selection = window.getSelection();
-        const selectedText = selection.toString().trim();
-        
-        // Store selected text in state
-        state.selectedText = selectedText;
-        
-        // Enable/disable buttons based on selection
-        const hasSelection = selectedText.length > 0;
-        generateButton.disabled = !hasSelection;
-        
-        // Show a visual indication of selection
-        if (hasSelection) {
-            textInput.classList.add('has-selection');
+        // Clear any selection in Quill or fall back to window selection
+        if (state.editor && state.editor.setSelection) {
+            // Clear Quill selection
+            state.editor.setSelection(null);
         } else {
-            textInput.classList.remove('has-selection');
+            // Fallback to window selection
+            window.getSelection().removeAllRanges();
         }
     }
     
@@ -556,10 +634,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update UI to show processing state
             generateButton.disabled = true;
             generateButton.textContent = 'Generating...';
-            
-            // Clear any existing highlights and re-highlight selection
-            clearAllHighlights();
-            highlightSelection();
             
             // Get cards from Claude API
             const cards = await generateCardsWithClaude(
@@ -582,27 +656,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             generateButton.disabled = false;
             generateButton.textContent = 'Create Cards';
-        }
-    }
-    
-    // generateQuestionsFromSelection function removed
-    
-    // Chat functions removed
-    
-    
-    // Simple approach: We won't try to modify the DOM for highlighting.
-    // Instead, we'll create a new element that overlays the text.
-    
-    function highlightSelection() {
-        try {
-            // Get the selected text from state
-            const selectedText = state.selectedText;
-            if (!selectedText || selectedText.length === 0) return;
-            
-            // Just add a class to indicate selection
-            textInput.classList.add('has-selection');
-        } catch (e) {
-            console.error('Error in highlighting:', e);
         }
     }
     
