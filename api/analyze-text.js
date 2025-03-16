@@ -1,13 +1,8 @@
 // Vercel serverless function for text analysis
 const axios = require('axios');
 
-// Configuration
-const API_CONFIG = {
-  ANTHROPIC_API_URL: "https://api.anthropic.com/v1/messages",
-  CLAUDE_MODEL: "claude-3-7-sonnet-20250219",
-  ANTHROPIC_VERSION: "2023-06-01",
-  ANALYSIS_PROMPT: `You analyze text to extract key contextual information. Create a concise 1-2 paragraph summary that includes: the author/source if identifiable, the main thesis or argument, key points, and relevant background. This summary will serve as context for future interactions with sections of this text.`
-};
+// Import shared prompts and API configuration
+const { API_CONFIG } = require('../prompts');
 
 // Helper function to truncate text
 function truncateText(text, maxLength = 8000) {
@@ -39,24 +34,24 @@ module.exports = async (req, res) => {
     if (!text) {
       return res.status(400).json({ error: 'Text is required' });
     }
-    
+
     if (!userApiKey) {
       return res.status(400).json({ error: 'No API key provided. Please add your Claude API key in settings.' });
     }
     
     const truncatedText = truncateText(text, 10000);
     
+    const userPrompt = `Please analyze this text and provide a concise contextual summary (1-2 paragraphs maximum):
+
+${truncatedText}`;
+
     const payload = {
       model: API_CONFIG.CLAUDE_MODEL,
-      system: API_CONFIG.ANALYSIS_PROMPT,
-      messages: [{ 
-        role: 'user', 
-        content: `Please analyze this text and provide a concise contextual summary (1-2 paragraphs maximum):\n\n${truncatedText}`
-      }],
+      system: API_CONFIG.PROMPTS.ANALYSIS,
+      messages: [{ role: 'user', content: userPrompt }],
       max_tokens: 1000
     };
 
-    // Call Claude API with timeout
     try {
       const response = await axios({
         method: 'post',
@@ -67,14 +62,14 @@ module.exports = async (req, res) => {
           'anthropic-version': API_CONFIG.ANTHROPIC_VERSION
         },
         data: payload,
-        timeout: 15000 // 15 second timeout
+        timeout: 9000 // 9 second timeout
       });
       
       return res.status(200).json(response.data);
     } catch (apiError) {
       // Handle axios errors
       if (apiError.code === 'ECONNABORTED') {
-        return res.status(504).json({ error: 'Request to Claude API timed out. Try a smaller text selection.' });
+        return res.status(504).json({ error: 'Request to Claude API timed out. Try with a smaller text.' });
       }
       
       if (apiError.response) {

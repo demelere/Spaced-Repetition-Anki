@@ -1,55 +1,8 @@
 // Vercel serverless function for generating flashcards
 const axios = require('axios');
 
-// Configuration
-const API_CONFIG = {
-  ANTHROPIC_API_URL: "https://api.anthropic.com/v1/messages",
-  CLAUDE_MODEL: "claude-3-7-sonnet-20250219",
-  ANTHROPIC_VERSION: "2023-06-01",
-  CARDS_PROMPT: `You are an expert in creating high-quality spaced repetition flashcards. 
-Your task is to generate effective flashcards from the highlighted text excerpt, with the full text provided for context.
-
-Guidelines for creating excellent flashcards:
-• Be very concise!
-• Focus on core concepts, relationships, and techniques rather than trivia or isolated facts
-• Break complex ideas into smaller, atomic concepts
-• Ensure each card tests one specific idea (atomic)
-• Front of card should ask a specific question that prompts recall
-• Back of card should provide a concise, complete answer
-• CRITICAL: Make each card standalone and self-contained, with all necessary context included. NEVER use phrases like "according to this text" or "in this selection" since users will see these cards out of context months later
-• When referencing the author or source, use their specific name rather than general phrases like "the author" or "this text"
-
-You will also analyze the content and suggest an appropriate deck category.
-The specific deck options will be dynamically determined and provided in the user message.
-
-CRITICAL: You MUST ALWAYS output your response as a valid JSON array of card objects. NEVER provide any prose, explanation or markdown formatting.
-
-Each card object must have the following structure:
-
-{
-  "front": "The question or prompt text goes here",
-  "back": "The answer or explanation text goes here",
-  "deck": "One of the deck categories listed above"
-}
-
-Example of expected JSON format:
-
-[
-  {
-    "front": "What is the primary function of X?",
-    "back": "X primarily functions to do Y by using mechanism Z.",
-    "deck": "CS/Hardware"
-  },
-  {
-    "front": "Why is concept A important in the context of B?",
-    "back": "Concept A is crucial because it enables process C and prevents problem D.",
-    "deck": "Math/Physics"
-  }
-]
-
-Generate between 1-5 cards depending on the complexity and amount of content in the highlighted text.
-Your response MUST BE ONLY valid JSON - no introduction, no explanation, no markdown formatting.`
-};
+// Import shared prompts and API configuration
+const { API_CONFIG } = require('../prompts');
 
 // Helper function to truncate text
 function truncateText(text, maxLength = 8000) {
@@ -103,7 +56,7 @@ ${truncateText(textContext, 1500)}` : ''}`;
 
     const payload = {
       model: API_CONFIG.CLAUDE_MODEL,
-      system: API_CONFIG.CARDS_PROMPT,
+      system: API_CONFIG.PROMPTS.CARDS,
       messages: [{ role: 'user', content: userPrompt }],
       max_tokens: 4000
     };
@@ -119,7 +72,7 @@ ${truncateText(textContext, 1500)}` : ''}`;
           'anthropic-version': API_CONFIG.ANTHROPIC_VERSION
         },
         data: payload,
-        timeout: 25000 // 25 second timeout to fit within Vercel's 10s limit
+        timeout: 9000 // 9 second timeout to fit within Vercel's 10s limit
       });
       
       return res.status(200).json(response.data);
