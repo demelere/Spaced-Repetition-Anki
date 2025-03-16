@@ -17,6 +17,11 @@ Guidelines for creating excellent flashcards:
 • CRITICAL: Keep answers as brief as possible while maintaining accuracy - aim for 10-25 words max
 • When referencing the author or source, use their specific name rather than general phrases like "the author" or "this text" which won't make sense months later when the user is reviewing the cards
 • Try to cite the author or the source when discussing something that is not an established concept but rather a new take or theory or prediction. 
+• The questions should be precise and unambiguously exclude alternative correct answers
+• The questions should encode ideas from multiple angles
+• Avoid yes/no question, or, in general, questions that admit a binary answer
+• Avoid unordered lists of items (especially if they contain many items)
+• If quantities are involved, they should be relative, or the unit of measure should be specified in the question
 
 You will also analyze the content and suggest an appropriate deck category.
 The specific deck options will be dynamically determined and provided in the user message.
