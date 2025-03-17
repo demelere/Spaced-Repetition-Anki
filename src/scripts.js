@@ -75,7 +75,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Validate the Anthropic API key
         if (!validateAnthropicApiKey(anthropicKey)) {
-            anthropicApiKeyError.textContent = 'Please enter a valid Claude API key (starts with sk-ant-)';
+            anthropicApiKeyError.textContent = 'Required: Enter a valid Claude API key (starts with sk-ant-)';
+            anthropicApiKeyInput.focus();
             return;
         }
         
@@ -110,12 +111,13 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Cancel button in API key modal
     apiKeyCancelButton.addEventListener('click', () => {
-        // If we have API keys stored, just close the modal
-        if (hasApiKeys()) {
+        // If we have an Anthropic API key stored, just close the modal
+        const storedKeys = getStoredApiKeys();
+        if (storedKeys.anthropicApiKey) {
             apiKeyModal.style.display = 'none';
         } else {
-            // Otherwise, show a warning
-            if (confirm('Without an API key, the application cannot function. Are you sure you want to cancel?')) {
+            // Otherwise, show a warning specifically about the required Claude API key
+            if (confirm('Without a Claude API key, you won\'t be able to generate flashcards. Do you want to continue without setting up the API key?')) {
                 apiKeyModal.style.display = 'none';
             }
         }

@@ -79,9 +79,9 @@
                         Claude API Key
                         <span class="required">Required</span>
                     </label>
-                    <input type="text" id="anthropicApiKey" placeholder="sk-ant-api03-..." autocomplete="off">
+                    <input type="text" id="anthropicApiKey" placeholder="sk-ant-api03-..." autocomplete="off" style="border-left: 4px solid var(--primary-color);">
                     <div class="api-key-help">
-                        Get your API key from <a href="https://console.anthropic.com/keys" target="_blank">console.anthropic.com/keys</a>
+                        Required to generate cards. Get your API key from <a href="https://console.anthropic.com/keys" target="_blank">console.anthropic.com/keys</a>
                     </div>
                     <div id="anthropicApiKeyError" class="api-key-error"></div>
                 </div>
@@ -91,9 +91,9 @@
                         Mochi API Key
                         <span class="optional">Optional</span>
                     </label>
-                    <input type="text" id="mochiApiKey" placeholder="Your Mochi API key" autocomplete="off">
+                    <input type="text" id="mochiApiKey" placeholder="Your Mochi API key (optional)" autocomplete="off">
                     <div class="api-key-help">
-                        Get your API key from the Mochi app. If not provided, cards will be exported as markdown.
+                        Optional - lets you export directly to Mochi. Without this, cards can still be exported as markdown.
                     </div>
                 </div>
                 
