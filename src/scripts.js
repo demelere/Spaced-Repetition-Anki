@@ -1022,8 +1022,8 @@ document.addEventListener('DOMContentLoaded', () => {
             cards.forEach((card, index) => {
                 markdown += `### Card ${index + 1}\n\n`;
                 markdown += `**Question:** ${card.front}\n\n`;
-                markdown += `**Answer:** ${card.back}\n\n`;
                 markdown += `---\n\n`;
+                markdown += `**Answer:** ${card.back}\n\n`;
             });
         }
         
