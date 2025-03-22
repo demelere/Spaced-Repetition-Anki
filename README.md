@@ -72,22 +72,6 @@ The application uses the following environment variables:
 5. Optionally change the deck for any card by clicking the deck label
 6. Use the dropdown menu to export to Mochi or as markdown
 
-## Deployment Options
-
-### Vercel
-
-1. Push your code to GitHub
-2. Import the repository in Vercel
-3. Add the `ANTHROPIC_API_KEY` and `MOCHI_API_KEY` as environment variables
-4. Deploy
-
-### Heroku
-
-1. Create a new Heroku app
-2. Push your code to Heroku
-3. Set the Config Vars `ANTHROPIC_API_KEY` and `MOCHI_API_KEY`
-4. Deploy
-
 ## Design Principles
 
 This application follows established principles for effective spaced repetition learning:
