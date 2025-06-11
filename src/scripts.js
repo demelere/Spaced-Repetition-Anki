@@ -44,7 +44,11 @@ document.addEventListener('DOMContentLoaded', () => {
         documentContext: '',
         isAnalyzing: false,
         fromPaste: false,
-        editor: null
+        editor: null,
+        // File management properties
+        currentFile: null,
+        availableFiles: [],
+        isFileLoaded: false
     };
     
     // Toggle dropdown menu when menu button is clicked
@@ -75,8 +79,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (storedKeys.anthropicApiKey) {
         // Pre-fill the form with stored keys (masked)
         anthropicApiKeyInput.value = storedKeys.anthropicApiKey;
-        // Initialize Anki decks
+        // Initialize Anki decks and then show file selection
         initializeAnkiDecks();
+        showFileSelectionModal();
     } else {
         // Show API key modal on startup if no API keys are stored
         showApiKeyModal();
@@ -112,6 +117,9 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Show success notification
             showNotification('API keys saved successfully', 'success');
+            
+            // Show file selection modal
+            showFileSelectionModal();
         } else {
             // Show error notification
             showNotification('Failed to save API keys', 'error');
@@ -147,9 +155,17 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function updateUiForApiKeys() {
-        // Update export button text for Anki
+        // Update export button text based on file status
+        updateExportButtonText();
+    }
+    
+    function updateExportButtonText() {
         const exportButton = document.getElementById('exportButton');
-        exportButton.textContent = 'Export to Anki';
+        if (state.isFileLoaded && state.currentFile) {
+            exportButton.textContent = 'Add to Anki Deck';
+        } else {
+            exportButton.textContent = 'Export to Anki';
+        }
     }
     
     // Call this on startup to set up the UI correctly
@@ -774,11 +790,27 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     function clearAllCards() {
-        // Simply clear all cards without confirmation
-        state.cards = [];
-        renderCards(); // This will hide the output panel and restore full height to editor
-        updateButtonStates();
-        showNotification('All cards cleared', 'info');
+        if (state.isFileLoaded) {
+            const choice = confirm('Do you want to:\n\nOK - Clear cards and start a new file\nCancel - Just clear the current view (keep file loaded)');
+            
+            if (choice) {
+                // Start fresh session
+                startFreshSession();
+                showNotification('Started new session', 'info');
+            } else {
+                // Just clear the view but keep file loaded
+                state.cards = [];
+                renderCards();
+                updateButtonStates();
+                showNotification('Cleared current view', 'info');
+            }
+        } else {
+            // No file loaded, just clear
+            state.cards = [];
+            renderCards();
+            updateButtonStates();
+            showNotification('All cards cleared', 'info');
+        }
     }
     
     // clearAllQuestions function removed
@@ -794,7 +826,19 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Show loading indicator
             exportButton.disabled = true;
+            const originalText = exportButton.textContent;
             exportButton.textContent = 'Preparing Export...';
+            
+            // Prepare request body
+            const requestBody = { 
+                cards: state.cards,
+                append: true
+            };
+
+            // If we have a current file, use it
+            if (state.currentFile) {
+                requestBody.filename = state.currentFile;
+            }
             
             // Use the server endpoint to format cards for Anki
             const response = await fetch('/api/anki-export', {
@@ -802,10 +846,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                body: JSON.stringify({ 
-                    cards: state.cards,
-                    append: true
-                })
+                body: JSON.stringify(requestBody)
             });
             
             if (!response.ok) {
@@ -813,6 +854,13 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             const result = await response.json();
+            
+            // Update current file if we created a new one
+            if (!state.currentFile) {
+                state.currentFile = result.filename;
+                state.isFileLoaded = true;
+                updateExportButtonText();
+            }
             
             // Download the TSV file
             const blob = new Blob([result.content], { type: 'text/tab-separated-values' });
@@ -832,7 +880,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             // Success notification
             const message = result.appended 
-                ? `${result.cardCount} cards appended to existing ${result.filename}!`
+                ? `${result.cardCount} cards appended to ${result.filename}!`
                 : `${result.cardCount} cards exported to new file ${result.filename}!`;
             showNotification(message, 'success');
             
@@ -845,7 +893,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } finally {
             // Reset button state
             exportButton.disabled = false;
-            exportButton.textContent = 'Export to Anki';
+            updateExportButtonText();
         }
     }
     
@@ -939,4 +987,345 @@ document.addEventListener('DOMContentLoaded', () => {
             URL.revokeObjectURL(url);
         }, 0);
     }
+
+    // ===== FILE MANAGEMENT FUNCTIONS =====
+
+    async function showFileSelectionModal() {
+        try {
+            // Fetch available files
+            const response = await fetch('/api/anki-export');
+            const data = await response.json();
+            
+            if (!data.success) {
+                console.error('Failed to fetch files:', data.error);
+                showNotification('Error loading files. Starting fresh session.', 'warning');
+                return;
+            }
+
+            state.availableFiles = data.files;
+
+            // Create modal
+            const modalOverlay = document.createElement('div');
+            modalOverlay.className = 'modal-overlay';
+            modalOverlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.5);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                z-index: 1000;
+            `;
+
+            const modalContent = document.createElement('div');
+            modalContent.className = 'modal-content';
+            modalContent.style.cssText = `
+                background: white;
+                padding: 30px;
+                border-radius: 8px;
+                width: 500px;
+                max-height: 80vh;
+                overflow-y: auto;
+            `;
+
+            const modalHeader = document.createElement('h2');
+            modalHeader.textContent = 'Load Anki Deck or Start Fresh';
+            modalHeader.style.marginBottom = '20px';
+
+            const description = document.createElement('p');
+            description.textContent = 'Choose an existing deck to continue adding cards, or start a new deck.';
+            description.style.marginBottom = '20px';
+            description.style.color = '#666';
+
+            const buttonsContainer = document.createElement('div');
+            buttonsContainer.style.marginBottom = '20px';
+
+            // Start Fresh button
+            const startFreshButton = document.createElement('button');
+            startFreshButton.textContent = 'Start Fresh Deck';
+            startFreshButton.className = 'btn btn-primary';
+            startFreshButton.style.cssText = `
+                padding: 10px 20px;
+                margin-right: 10px;
+                background: #007bff;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            `;
+
+            // New Deck button
+            const newDeckButton = document.createElement('button');
+            newDeckButton.textContent = 'Create Named Deck';
+            newDeckButton.className = 'btn btn-secondary';
+            newDeckButton.style.cssText = `
+                padding: 10px 20px;
+                margin-right: 10px;
+                background: #6c757d;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            `;
+
+            buttonsContainer.appendChild(startFreshButton);
+            buttonsContainer.appendChild(newDeckButton);
+
+            modalContent.appendChild(modalHeader);
+            modalContent.appendChild(description);
+            modalContent.appendChild(buttonsContainer);
+
+            // Existing files section
+            if (state.availableFiles.length > 0) {
+                const existingHeader = document.createElement('h3');
+                existingHeader.textContent = 'Or load an existing deck:';
+                existingHeader.style.cssText = 'margin: 20px 0 10px 0; border-top: 1px solid #eee; padding-top: 20px;';
+
+                const filesList = document.createElement('div');
+                filesList.style.cssText = 'max-height: 200px; overflow-y: auto;';
+
+                state.availableFiles.forEach(file => {
+                    const fileItem = document.createElement('div');
+                    fileItem.className = 'file-item';
+                    fileItem.style.cssText = `
+                        padding: 10px;
+                        border: 1px solid #ddd;
+                        margin-bottom: 5px;
+                        border-radius: 4px;
+                        cursor: pointer;
+                        transition: background-color 0.2s;
+                    `;
+
+                    fileItem.innerHTML = `
+                        <strong>${file.filename}</strong><br>
+                        <small>Cards: ${file.cardCount} | Modified: ${new Date(file.modified).toLocaleDateString()}</small>
+                    `;
+
+                    fileItem.addEventListener('mouseover', () => {
+                        fileItem.style.backgroundColor = '#f8f9fa';
+                    });
+
+                    fileItem.addEventListener('mouseout', () => {
+                        fileItem.style.backgroundColor = 'white';
+                    });
+
+                    fileItem.addEventListener('click', () => {
+                        loadExistingFile(file.filename);
+                        document.body.removeChild(modalOverlay);
+                    });
+
+                    filesList.appendChild(fileItem);
+                });
+
+                modalContent.appendChild(existingHeader);
+                modalContent.appendChild(filesList);
+            }
+
+            modalOverlay.appendChild(modalContent);
+            document.body.appendChild(modalOverlay);
+
+            // Event listeners
+            startFreshButton.addEventListener('click', () => {
+                startFreshSession();
+                document.body.removeChild(modalOverlay);
+            });
+
+            newDeckButton.addEventListener('click', () => {
+                document.body.removeChild(modalOverlay);
+                showNewDeckModal();
+            });
+
+        } catch (error) {
+            console.error('Error showing file selection modal:', error);
+            showNotification('Error loading file selection. Starting fresh session.', 'warning');
+            startFreshSession();
+        }
+    }
+
+    function showNewDeckModal() {
+        const modalOverlay = document.createElement('div');
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        `;
+
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        modalContent.style.cssText = `
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            width: 400px;
+        `;
+
+        modalContent.innerHTML = `
+            <h2 style="margin-bottom: 20px;">Create New Deck</h2>
+            <p style="margin-bottom: 15px; color: #666;">Enter a name for your new Anki deck:</p>
+            <input type="text" id="newDeckName" placeholder="My Study Deck" style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                margin-bottom: 20px;
+                font-size: 16px;
+            ">
+            <div style="text-align: right;">
+                <button id="cancelNewDeck" style="
+                    padding: 8px 16px;
+                    margin-right: 10px;
+                    background: #6c757d;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">Cancel</button>
+                <button id="createNewDeck" style="
+                    padding: 8px 16px;
+                    background: #007bff;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">Create</button>
+            </div>
+        `;
+
+        modalOverlay.appendChild(modalContent);
+        document.body.appendChild(modalOverlay);
+
+        const nameInput = document.getElementById('newDeckName');
+        const createButton = document.getElementById('createNewDeck');
+        const cancelButton = document.getElementById('cancelNewDeck');
+
+        nameInput.focus();
+
+        createButton.addEventListener('click', async () => {
+            const deckName = nameInput.value.trim();
+            if (!deckName) {
+                showNotification('Please enter a deck name', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/anki-export/new', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: deckName })
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    loadExistingFile(result.filename);
+                    showNotification(`Created new deck: ${result.filename}`, 'success');
+                } else {
+                    showNotification('Error creating deck: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error creating new deck:', error);
+                showNotification('Error creating new deck', 'error');
+            }
+
+            document.body.removeChild(modalOverlay);
+        });
+
+        cancelButton.addEventListener('click', () => {
+            document.body.removeChild(modalOverlay);
+            showFileSelectionModal();
+        });
+
+        nameInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                createButton.click();
+            }
+        });
+    }
+
+    async function loadExistingFile(filename) {
+        try {
+            const response = await fetch(`/api/anki-export/${filename}`);
+            const data = await response.json();
+
+            if (!data.success) {
+                showNotification('Error loading file: ' + data.error, 'error');
+                return;
+            }
+
+            // Update state
+            state.currentFile = filename;
+            state.isFileLoaded = true;
+            state.cards = data.cards || [];
+
+            // Update UI
+            updateExportButtonText();
+            renderCards();
+            updateButtonStates();
+
+            showNotification(`Loaded ${data.cardCount} cards from ${filename}`, 'success');
+
+        } catch (error) {
+            console.error('Error loading file:', error);
+            showNotification('Error loading file', 'error');
+        }
+    }
+
+    function startFreshSession() {
+        // Reset state
+        state.currentFile = null;
+        state.isFileLoaded = false;
+        state.cards = [];
+
+        // Update UI
+        updateExportButtonText();
+        renderCards();
+        updateButtonStates();
+
+        showNotification('Started fresh session', 'info');
+    }
+
+    // Add menu option to load a different file
+    function addFileManagementToMenu() {
+        const dropdown = document.getElementById('dropdown-menu');
+        
+        // Add file management options
+        const loadFileOption = document.createElement('a');
+        loadFileOption.href = '#';
+        loadFileOption.className = 'dropdown-item';
+        loadFileOption.innerHTML = '📁 Load Different Deck';
+        loadFileOption.addEventListener('click', (e) => {
+            e.preventDefault();
+            showFileSelectionModal();
+            dropdown.classList.remove('show');
+            menuButton.setAttribute('aria-expanded', 'false');
+        });
+
+        const newFileOption = document.createElement('a');
+        newFileOption.href = '#';
+        newFileOption.className = 'dropdown-item';
+        newFileOption.innerHTML = '🆕 Start New Deck';
+        newFileOption.addEventListener('click', (e) => {
+            e.preventDefault();
+            startFreshSession();
+            dropdown.classList.remove('show');
+            menuButton.setAttribute('aria-expanded', 'false');
+        });
+
+        // Add to dropdown
+        dropdown.appendChild(loadFileOption);
+        dropdown.appendChild(newFileOption);
+    }
+
+    // Initialize file management menu
+    addFileManagementToMenu();
 });

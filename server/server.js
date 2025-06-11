@@ -320,7 +320,7 @@ app.get('/api/server-status', (req, res) => {
 // API endpoint for Anki TSV export with persistence
 app.post('/api/anki-export', async (req, res) => {
   try {
-    const { cards, append = true } = req.body;
+    const { cards, append = true, filename: requestedFilename } = req.body;
     
     if (!cards || !Array.isArray(cards)) {
       return res.status(400).json({ error: 'Cards array is required' });
@@ -336,9 +336,15 @@ app.post('/api/anki-export', async (req, res) => {
       return `${front}\t${back}\t${deck}`;
     });
 
-    // Create TSV filename with current date
-    const dateStr = new Date().toISOString().slice(0, 10);
-    const filename = `anki-cards-${dateStr}.txt`;
+    // Determine filename
+    let filename;
+    if (requestedFilename) {
+      filename = requestedFilename;
+    } else {
+      const dateStr = new Date().toISOString().slice(0, 10);
+      filename = `anki-cards-${dateStr}.txt`;
+    }
+
     const filepath = path.join(__dirname, '..', 'exports', filename);
 
     // Ensure exports directory exists
@@ -421,6 +427,91 @@ app.get('/api/anki-export', (req, res) => {
 
   } catch (error) {
     console.error('Error listing export files:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to load cards from an existing export file
+app.get('/api/anki-export/:filename', (req, res) => {
+  try {
+    const { filename } = req.params;
+    const filepath = path.join(__dirname, '..', 'exports', filename);
+
+    if (!fs.existsSync(filepath)) {
+      return res.status(404).json({ error: 'File not found' });
+    }
+
+    const content = fs.readFileSync(filepath, 'utf8');
+    const lines = content.split('\n').filter(line => line.trim());
+    
+    if (lines.length <= 1) {
+      return res.status(200).json({
+        success: true,
+        filename: filename,
+        cards: [],
+        cardCount: 0
+      });
+    }
+
+    // Parse TSV content (skip header row)
+    const cards = lines.slice(1).map((line, index) => {
+      const [front, back, deck] = line.split('\t');
+      return {
+        id: `${filename}-${index}`,
+        front: front?.replace(/<br>/g, '\n') || '',
+        back: back?.replace(/<br>/g, '\n') || '',
+        deck: deck || 'Default'
+      };
+    });
+
+    return res.status(200).json({
+      success: true,
+      filename: filename,
+      cards: cards,
+      cardCount: cards.length
+    });
+
+  } catch (error) {
+    console.error('Error loading export file:', error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// API endpoint to create a new export file with custom name
+app.post('/api/anki-export/new', (req, res) => {
+  try {
+    const { filename } = req.body;
+    
+    if (!filename) {
+      return res.status(400).json({ error: 'Filename is required' });
+    }
+
+    // Sanitize filename
+    const sanitizedFilename = filename.replace(/[^a-zA-Z0-9-_]/g, '-') + '.txt';
+    const filepath = path.join(__dirname, '..', 'exports', sanitizedFilename);
+
+    // Ensure exports directory exists
+    const exportsDir = path.join(__dirname, '..', 'exports');
+    if (!fs.existsSync(exportsDir)) {
+      fs.mkdirSync(exportsDir, { recursive: true });
+    }
+
+    // Create new file with just headers
+    const tsvContent = 'Front\tBack\tDeck\n';
+    fs.writeFileSync(filepath, tsvContent);
+
+    console.log(`Created new Anki export file: ${sanitizedFilename}`);
+
+    return res.status(200).json({
+      success: true,
+      filename: sanitizedFilename,
+      filepath: filepath,
+      cards: [],
+      cardCount: 0
+    });
+
+  } catch (error) {
+    console.error('Error creating new export file:', error);
     return res.status(500).json({ error: error.message });
   }
 });
