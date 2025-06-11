@@ -11,11 +11,21 @@ import {
 // Quill.js is loaded globally from CDN
 
 document.addEventListener('DOMContentLoaded', () => {
+    // DOM Elements - defined first
+    const textInput = document.getElementById('textInput');
+    const generateButton = document.getElementById('generateButton');
+    const cardsContainer = document.getElementById('cardsContainer');
+    const exportButton = document.getElementById('exportButton');
+    const clearCardsButton = document.getElementById('clearCardsButton');
+    const splitterHandle = document.getElementById('splitterHandle');
+    const editorPanel = document.getElementById('editorPanel');
+    const outputPanel = document.getElementById('outputPanel');
+    
     // API Key Management
     const apiKeyModal = document.getElementById('apiKeyModal');
     const settingsButton = document.getElementById('settingsButton');
     const anthropicApiKeyInput = document.getElementById('anthropicApiKey');
-    const mochiApiKeyInput = document.getElementById('mochiApiKey');
+    // Mochi API key input removed for Anki integration
     const storeLocallyCheckbox = document.getElementById('storeLocallyCheckbox');
     const apiKeySaveButton = document.getElementById('apiKeySave');
     const apiKeyCancelButton = document.getElementById('apiKeyCancel');
@@ -24,6 +34,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // Dropdown Menu
     const menuButton = document.getElementById('menuButton');
     const dropdownMenu = document.getElementById('dropdown-menu');
+    
+    // App State - defined early so it can be used by functions
+    const state = {
+        cards: [],
+        selectedText: '',
+        currentDeck: null,
+        decks: {},
+        documentContext: '',
+        isAnalyzing: false,
+        fromPaste: false,
+        editor: null
+    };
     
     // Toggle dropdown menu when menu button is clicked
     menuButton.addEventListener('click', () => {
@@ -53,12 +75,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (storedKeys.anthropicApiKey) {
         // Pre-fill the form with stored keys (masked)
         anthropicApiKeyInput.value = storedKeys.anthropicApiKey;
-        if (storedKeys.mochiApiKey) {
-            mochiApiKeyInput.value = storedKeys.mochiApiKey;
-            // Fetch decks right away if we have a Mochi API key
-            fetchDecks()
-                .catch(error => console.error('Failed to load Mochi decks on startup:', error));
-        }
+        // Initialize Anki decks
+        initializeAnkiDecks();
     } else {
         // Show API key modal on startup if no API keys are stored
         showApiKeyModal();
@@ -70,7 +88,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Save button in API key modal
     apiKeySaveButton.addEventListener('click', async () => {
         const anthropicKey = anthropicApiKeyInput.value.trim();
-        const mochiKey = mochiApiKeyInput.value.trim();
         const storeLocally = storeLocallyCheckbox.checked;
         
         // Validate the Anthropic API key
@@ -81,7 +98,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         // Store the API keys
-        const saveSuccess = storeApiKeys(anthropicKey, mochiKey, storeLocally);
+        const saveSuccess = storeApiKeys(anthropicKey, '', storeLocally);
         
         if (saveSuccess) {
             // Close the modal
@@ -90,16 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update UI based on available keys
             updateUiForApiKeys();
             
-            // Fetch decks if Mochi API key is provided
-            if (mochiKey) {
-                try {
-                    await fetchDecks();
-                    // Mochi decks successfully fetched
-                } catch (error) {
-                    console.error('Failed to fetch Mochi decks:', error);
-                    showNotification('Failed to connect to Mochi API', 'error');
-                }
-            }
+            // Initialize Anki decks (no API needed)
+            initializeAnkiDecks();
             
             // Show success notification
             showNotification('API keys saved successfully', 'success');
@@ -132,49 +141,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (storedKeys.anthropicApiKey) {
             anthropicApiKeyInput.value = storedKeys.anthropicApiKey;
         }
-        if (storedKeys.mochiApiKey) {
-            mochiApiKeyInput.value = storedKeys.mochiApiKey;
-        }
         
         // Show the modal
         apiKeyModal.style.display = 'flex';
     }
     
     function updateUiForApiKeys() {
-        const keys = getStoredApiKeys();
-        
-        // Update export button text based on whether we have a Mochi API key
+        // Update export button text for Anki
         const exportButton = document.getElementById('exportButton');
-        if (keys.mochiApiKey) {
-            exportButton.textContent = 'Export to Mochi';
-        } else {
-            exportButton.textContent = 'Export as Markdown';
-        }
+        exportButton.textContent = 'Export to Anki';
     }
     
     // Call this on startup to set up the UI correctly
     updateUiForApiKeys();
-    // DOM Elements
-    const textInput = document.getElementById('textInput');
-    const generateButton = document.getElementById('generateButton');
-    const cardsContainer = document.getElementById('cardsContainer');
-    const exportButton = document.getElementById('exportButton');
-    const clearCardsButton = document.getElementById('clearCardsButton');
-    const splitterHandle = document.getElementById('splitterHandle');
-    const editorPanel = document.getElementById('editorPanel');
-    const outputPanel = document.getElementById('outputPanel');
-    
-    // App State
-    const state = {
-        cards: [],
-        selectedText: '',
-        currentDeck: null,
-        decks: {},
-        documentContext: '',
-        isAnalyzing: false,
-        fromPaste: false,
-        editor: null
-    };
     
     // Initialize Quill Editor
     function initQuillEditor() {
@@ -267,117 +246,33 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Fetch decks from Mochi API
-    async function fetchDecks() {
-        try {
-            // Check if we have a client-side Mochi API key
-            const { mochiApiKey } = getStoredApiKeys();
-            
-            if (!mochiApiKey) {
-                // Use fallback decks when no Mochi API key is available
-                state.decks = { "General": "general" };
-                state.currentDeck = "General";
-                
-                // Update export button text
-                const exportButton = document.getElementById('exportButton');
-                if (exportButton) {
-                    exportButton.textContent = 'Export as Markdown';
-                }
-                
-                return;
-            }
-            
-            // First try to use the server endpoint with user's API key
-            try {
-                // Pass the user's Mochi API key to the server endpoint
-                const response = await fetch(`/api/mochi-decks?userMochiKey=${encodeURIComponent(mochiApiKey)}`);
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    if (data.success && data.decks) {
-                        // Store the decks in the state
-                        state.decks = data.decks;
-                        
-                        // Set currentDeck to first deck in the list
-                        state.currentDeck = Object.keys(data.decks)[0] || "General";
-                        // Decks loaded successfully
-                        return;
-                    }
-                }
-            } catch (serverError) {
-                // Server-side API failed, trying client-side API next
-            }
-            
-            // If server-side fails, try client-side API
-            if (mochiApiKey) {
-                // Mochi uses HTTP Basic Auth with API key followed by colon
-                const authHeader = `Basic ${btoa(`${mochiApiKey}:`)}`;
-                
-                try {
-                    // Directly call Mochi API from the client
-                    const response = await fetch('https://app.mochi.cards/api/decks/', {
-                        method: 'GET',
-                        headers: {
-                            'Authorization': authHeader
-                        }
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`Mochi API Error: ${await response.text()}`);
-                    }
-                    
-                    const decksData = await response.json();
-                    
-                    // Transform data for client use
-                    const formattedDecks = {};
-                    let activeDecksCount = 0;
-                    
-                    decksData.docs.forEach(deck => {
-                        // Skip decks that are in trash or archived
-                        if (deck['trashed?'] || deck['archived?']) {
-                            return; // Skip this deck
-                        }
-                        
-                        // Only include active decks
-                        activeDecksCount++;
-                        
-                        // Remove [[ ]] if present in the ID
-                        const cleanId = deck.id.replace(/\[\[|\]\]/g, '');
-                        formattedDecks[deck.name] = cleanId;
-                    });
-                    
-                    // Successfully loaded active decks from Mochi API
-                    
-                    // Store the decks in the state
-                    state.decks = formattedDecks;
-                    
-                    // Set currentDeck to first deck in the list
-                    state.currentDeck = Object.keys(formattedDecks)[0] || "General";
-                    
-                    // Update export button text
-                    const exportButton = document.getElementById('exportButton');
-                    if (exportButton) {
-                        exportButton.textContent = 'Export to Mochi';
-                    }
-                    
-                    return;
-                } catch (clientApiError) {
-                    console.error('Error using client-side Mochi API:', clientApiError);
-                }
-            }
-            
-            // Create deck selector dropdown
-            createDeckSelector();
-            
-        } catch (error) {
-            console.error('Error fetching decks:', error);
-            // Fallback to a simple deck structure
-            state.decks = { "General": "general" };
-            state.currentDeck = "General";
-            
-            // Create deck selector with fallback
-            createDeckSelector();
+    function initializeAnkiDecks() {
+        // Set up default Anki deck names - these will be used as-is in the TSV export
+        state.decks = {
+            "General": "General",
+            "Vocabulary": "Vocabulary", 
+            "Concepts": "Concepts",
+            "Facts": "Facts",
+            "Study Notes": "Study Notes",
+            "Language Learning": "Language Learning",
+            "Science": "Science",
+            "History": "History",
+            "Math": "Math"
+        };
+        
+        // Set default deck
+        state.currentDeck = "General";
+        
+        // Update export button text
+        const exportButton = document.getElementById('exportButton');
+        if (exportButton) {
+            exportButton.textContent = 'Export to Anki';
         }
+        
+        // Create deck selector dropdown
+        createDeckSelector();
+        
+        console.log('Initialized Anki deck options:', Object.keys(state.decks));
     }
     
     // Function to show status notifications
@@ -423,7 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Event Listeners
     generateButton.addEventListener('click', generateCardsFromSelection);
-    exportButton.addEventListener('click', exportToMochi);
+    exportButton.addEventListener('click', exportToAnki);
     clearCardsButton.addEventListener('click', clearAllCards);
     
     // Initialize Quill editor
@@ -809,50 +704,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const deckSelect = document.createElement('select');
         deckSelect.className = 'deck-select';
         
-        // Add a refresh button
-        const refreshButton = document.createElement('button');
-        refreshButton.className = 'modal-refresh-button';
-        refreshButton.title = 'Refresh deck list from Mochi';
-        refreshButton.innerHTML = '↻';
-        refreshButton.addEventListener('click', () => {
-            refreshButton.disabled = true;
-            
-            fetchDecks().then(() => {
-                // Update the select options
-                deckSelect.innerHTML = '';
-                const updatedDeckNames = Object.keys(state.decks).sort((a, b) => 
-                    a.localeCompare(b, undefined, { sensitivity: 'base' })
-                );
-                
-                updatedDeckNames.forEach(deckName => {
-                    const option = document.createElement('option');
-                    option.value = deckName;
-                    option.textContent = deckName;
-                    if (deckName === card.deck) {
-                        option.selected = true;
-                    }
-                    deckSelect.appendChild(option);
-                });
-                
-                // Show confirmation
-                refreshButton.innerHTML = '✓';
-                setTimeout(() => {
-                    refreshButton.innerHTML = '↻';
-                    refreshButton.disabled = false;
-                }, 1500);
-                
-                showNotification(`${updatedDeckNames.length} decks loaded`, 'success');
-            }).catch(error => {
-                console.error('Error refreshing decks:', error);
-                refreshButton.innerHTML = '✗';
-                setTimeout(() => {
-                    refreshButton.innerHTML = '↻';
-                    refreshButton.disabled = false;
-                }, 1500);
-                
-                showNotification('Failed to refresh decks', 'error');
-            });
-        });
+        // No refresh button needed for static Anki decks
         
         // Get deck names and sort them alphabetically
         const sortedDeckNames = deckNames.sort((a, b) => 
@@ -871,7 +723,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         
         selectContainer.appendChild(deckSelect);
-        selectContainer.appendChild(refreshButton);
         
         // Create button container
         const buttonContainer = document.createElement('div');
@@ -933,7 +784,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // clearAllQuestions function removed
     
     
-    async function exportToMochi() {
+    async function exportToAnki() {
         try {
             // Check if we have any cards to export
             if (state.cards.length === 0) {
@@ -941,57 +792,57 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            // Get the stored API keys
-            const { mochiApiKey } = getStoredApiKeys();
-            
-            // If no Mochi API key, export as markdown instead
-            if (!mochiApiKey) {
-                exportAsMarkdown();
-                return;
-            }
-            
-            // If we have a Mochi API key, prepare the cards for Mochi
-            const mochiData = formatCardsForMochi();
-            const cards = JSON.parse(mochiData).cards;
-            
             // Show loading indicator
             exportButton.disabled = true;
-            exportButton.textContent = 'Uploading...';
+            exportButton.textContent = 'Preparing Export...';
             
-            // Use the server endpoint to handle Mochi uploads, passing the user's API key
-            const response = await fetch('/api/upload-to-mochi', {
+            // Use the server endpoint to format cards for Anki
+            const response = await fetch('/api/anki-export', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ 
-                    cards,
-                    userMochiKey: mochiApiKey // Pass the user's Mochi API key to the server
+                    cards: state.cards,
+                    append: true
                 })
             });
             
             if (!response.ok) {
-                throw new Error('Failed to upload to Mochi');
+                throw new Error('Failed to format cards for Anki');
             }
             
             const result = await response.json();
             
+            // Download the TSV file
+            const blob = new Blob([result.content], { type: 'text/tab-separated-values' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = result.filename;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            
+            // Cleanup
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 100);
+            
             // Success notification
-            showNotification(`${result.totalSuccess} of ${result.totalCards} cards uploaded to Mochi successfully!`, 'success');
+            showNotification(`${result.cardCount} cards exported for Anki import!`, 'success');
             
         } catch (error) {
-            console.error('Error uploading to Mochi API:', error);
-            showNotification('Error uploading to Mochi. Exporting as markdown instead.', 'error');
+            console.error('Error exporting to Anki:', error);
+            showNotification('Error exporting to Anki. Exporting as markdown instead.', 'error');
             
             // Fall back to markdown export
             exportAsMarkdown();
         } finally {
             // Reset button state
             exportButton.disabled = false;
-            
-            // Update button text based on whether we have a Mochi API key
-            const { mochiApiKey } = getStoredApiKeys();
-            exportButton.textContent = mochiApiKey ? 'Export to Mochi' : 'Export as Markdown';
+            exportButton.textContent = 'Export to Anki';
         }
     }
     
@@ -1070,48 +921,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // exportQuestions function removed
     
-    function formatCardsForMochi() {
-        // Group cards by deck
-        const deckMap = {};
-        
-        state.cards.forEach(card => {
-            const deckName = card.deck;
-            const deckId = state.decks[deckName];
-            
-            if (!deckId) {
-                console.warn(`No deck ID found for deck: ${deckName}`);
-                return; // Skip this card
-            }
-            
-            if (!deckMap[deckId]) {
-                deckMap[deckId] = [];
-            }
-            
-            // Use the exact Mochi format: front \n---\n back (single newlines)
-            deckMap[deckId].push({
-                content: `${card.front}\n---\n${card.back}`
-            });
-        });
-        
-        // Format according to Mochi's JSON format
-        const data = {
-            version: 2,
-            cards: []
-        };
-        
-        // Add cards with their deck IDs
-        for (const [deckId, cards] of Object.entries(deckMap)) {
-            cards.forEach(card => {
-                data.cards.push({
-                    ...card,
-                    'deck-id': deckId
-                });
-            });
-        }
-        
-        console.log('Formatted cards for Mochi:', data);
-        return JSON.stringify(data, null, 2);
-    }
+    // formatCardsForMochi function removed - using Anki TSV format instead
     
     function downloadExport(data, filename) {
         const blob = new Blob([data], { type: 'application/json' });
