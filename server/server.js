@@ -18,6 +18,7 @@ try {
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const fetch = require('node-fetch');
 
 // Import shared prompts and API configuration
@@ -312,6 +313,116 @@ app.get('/api/server-status', (req, res) => {
     clientKeys: true, // This app uses client-side keys, not server environment variables
     timestamp: new Date().toISOString()
   });
+});
+
+// ANKI EXPORT ENDPOINTS
+
+// API endpoint for Anki TSV export with persistence
+app.post('/api/anki-export', async (req, res) => {
+  try {
+    const { cards, append = true } = req.body;
+    
+    if (!cards || !Array.isArray(cards)) {
+      return res.status(400).json({ error: 'Cards array is required' });
+    }
+
+    // Format cards for Anki (TSV format)
+    const ankiCards = cards.map(card => {
+      // Escape tabs and newlines in card content
+      const front = (card.front || '').replace(/\t/g, ' ').replace(/\n/g, '<br>');
+      const back = (card.back || '').replace(/\t/g, ' ').replace(/\n/g, '<br>');
+      const deck = card.deck || 'Default';
+      
+      return `${front}\t${back}\t${deck}`;
+    });
+
+    // Create TSV filename with current date
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const filename = `anki-cards-${dateStr}.txt`;
+    const filepath = path.join(__dirname, '..', 'exports', filename);
+
+    // Ensure exports directory exists
+    const exportsDir = path.join(__dirname, '..', 'exports');
+    if (!fs.existsSync(exportsDir)) {
+      fs.mkdirSync(exportsDir, { recursive: true });
+    }
+
+    let tsvContent;
+    let isNewFile = false;
+
+    if (append && fs.existsSync(filepath)) {
+      // File exists, append to it
+      const existingContent = fs.readFileSync(filepath, 'utf8');
+      tsvContent = existingContent + ankiCards.join('\n') + '\n';
+    } else {
+      // New file or not appending
+      isNewFile = true;
+      tsvContent = 'Front\tBack\tDeck\n' + ankiCards.join('\n') + '\n';
+    }
+
+    // Write to persistent file
+    fs.writeFileSync(filepath, tsvContent);
+
+    console.log(`${isNewFile ? 'Created' : 'Updated'} Anki export file: ${filename} with ${cards.length} cards`);
+
+    return res.status(200).json({
+      success: true,
+      content: tsvContent,
+      format: 'tsv',
+      cardCount: cards.length,
+      filename: filename,
+      filepath: filepath,
+      appended: append && !isNewFile
+    });
+
+  } catch (error) {
+    console.error('Server error during Anki export:', error);
+    return res.status(500).json({ error: `Unexpected error: ${error.message}` });
+  }
+});
+
+// API endpoint to get info about existing export files
+app.get('/api/anki-export', (req, res) => {
+  try {
+    const exportsDir = path.join(__dirname, '..', 'exports');
+    
+    if (!fs.existsSync(exportsDir)) {
+      return res.status(200).json({
+        success: true,
+        files: [],
+        message: 'No export files yet'
+      });
+    }
+
+    const files = fs.readdirSync(exportsDir)
+      .filter(file => file.startsWith('anki-cards-') && file.endsWith('.txt'))
+      .map(file => {
+        const filepath = path.join(exportsDir, file);
+        const stats = fs.statSync(filepath);
+        const content = fs.readFileSync(filepath, 'utf8');
+        const lines = content.split('\n').filter(line => line.trim());
+        const cardCount = Math.max(0, lines.length - 1); // Subtract header row
+
+        return {
+          filename: file,
+          size: stats.size,
+          created: stats.birthtime,
+          modified: stats.mtime,
+          cardCount: cardCount
+        };
+      })
+      .sort((a, b) => b.modified - a.modified); // Most recent first
+
+    return res.status(200).json({
+      success: true,
+      files: files,
+      supportedFormats: ['tsv', 'txt']
+    });
+
+  } catch (error) {
+    console.error('Error listing export files:', error);
+    return res.status(500).json({ error: error.message });
+  }
 });
 
 // API endpoint for direct Mochi integration

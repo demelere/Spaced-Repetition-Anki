@@ -831,7 +831,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 100);
             
             // Success notification
-            showNotification(`${result.cardCount} cards exported for Anki import!`, 'success');
+            const message = result.appended 
+                ? `${result.cardCount} cards appended to existing ${result.filename}!`
+                : `${result.cardCount} cards exported to new file ${result.filename}!`;
+            showNotification(message, 'success');
             
         } catch (error) {
             console.error('Error exporting to Anki:', error);
