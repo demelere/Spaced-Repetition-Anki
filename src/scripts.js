@@ -4,8 +4,7 @@ import {
     analyzeTextWithClaude,
     getStoredApiKeys,
     storeApiKeys,
-    validateAnthropicApiKey,
-    hasApiKeys
+    validateAnthropicApiKey
 } from './claude-api.js';
 
 // Quill.js is loaded globally from CDN
@@ -83,8 +82,8 @@ document.addEventListener('DOMContentLoaded', () => {
         initializeAnkiDecks();
         showFileSelectionModal();
     } else {
-        // Show API key modal on startup if no API keys are stored
-        showApiKeyModal();
+        // Check if server has API key configured before showing modal
+        checkServerConfiguration();
     }
     
     // Settings button opens the API key modal
@@ -1328,4 +1327,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize file management menu
     addFileManagementToMenu();
+
+    // Function to check server configuration
+    async function checkServerConfiguration() {
+        try {
+            const response = await fetch('/api/server-config');
+            const config = await response.json();
+            
+            if (config.hasServerApiKey) {
+                // Server has API key configured, skip modal and go straight to file selection
+                console.log('Server has API key configured, skipping client-side API key setup');
+                initializeAnkiDecks();
+                showFileSelectionModal();
+            } else {
+                // Server requires client API key, show modal
+                showApiKeyModal();
+            }
+        } catch (error) {
+            console.warn('Could not check server configuration, showing API key modal as fallback:', error);
+            showApiKeyModal();
+        }
+    }
 });

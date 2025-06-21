@@ -12,8 +12,9 @@ try {
   console.log('dotenv not installed, continuing without it');
 }
 
-// Note: This application uses client-side API keys passed with each request
-// rather than storing them in environment variables
+// Note: This application can use either server-side API keys from .env
+// or client-side API keys passed with each request
+// Server-side API key takes precedence if available
 
 const express = require('express');
 const cors = require('cors');
@@ -23,6 +24,25 @@ const fetch = require('node-fetch');
 
 // Import shared prompts and API configuration
 const { API_CONFIG } = require('../prompts');
+
+/**
+ * Helper function to get the API key to use
+ * @param {string} userApiKey - API key provided by client
+ * @returns {string} API key to use (server-side preferred)
+ */
+function getApiKey(userApiKey) {
+  // Server-side API key takes precedence if available
+  if (process.env.ANTHROPIC_API_KEY) {
+    return process.env.ANTHROPIC_API_KEY;
+  }
+  
+  // Fall back to client-provided API key
+  if (userApiKey) {
+    return userApiKey;
+  }
+  
+  throw new Error('No API key available. Please set ANTHROPIC_API_KEY in your .env file or provide an API key in the request.');
+}
 
 /**
  * Helper function to truncate text to a reasonable size
@@ -138,11 +158,7 @@ app.post('/api/analyze-text', async (req, res) => {
     }
     
     // Use user-provided API key only
-    const apiKey = userApiKey;
-    
-    if (!apiKey) {
-      return res.status(400).json({ error: 'No API key provided. Please add your API key in settings.' });
-    }
+    const apiKey = getApiKey(userApiKey);
     
     const truncatedText = truncateText(text, 10000);
     
@@ -176,11 +192,7 @@ app.post('/api/generate-cards', async (req, res) => {
     }
     
     // Use user-provided API key only
-    const apiKey = userApiKey;
-    
-    if (!apiKey) {
-      return res.status(400).json({ error: 'No API key provided. Please add your API key in settings.' });
-    }
+    const apiKey = getApiKey(userApiKey);
     
     const userPrompt = `Please create spaced repetition flashcards from the SELECTED TEXT below.
 Use the guidelines from the system prompt.
@@ -217,6 +229,13 @@ ${textContext}` : ''}`;
   }
 });
 
+// API endpoint for checking server API key configuration
+app.get('/api/server-config', (req, res) => {
+  res.json({
+    hasServerApiKey: !!process.env.ANTHROPIC_API_KEY,
+    requiresClientApiKey: !process.env.ANTHROPIC_API_KEY
+  });
+});
 
 // MOCHI API ENDPOINTS
 

@@ -39,7 +39,18 @@ A streamlined web application for creating high-quality spaced repetition flashc
    ```bash
    npm install
    ```
-3. Set your API key as environment variable:
+3. Set up your environment variables:
+   
+   **Option A: Using a .env file (recommended)**
+   ```bash
+   # Copy the example environment file
+   cp env.example .env
+   
+   # Edit .env and add your Claude API key
+   # Get your API key from: https://console.anthropic.com/
+   ```
+   
+   **Option B: Using environment variables**
    ```bash
    # Required for card generation
    export ANTHROPIC_API_KEY=your-claude-api-key-here
@@ -55,7 +66,29 @@ A streamlined web application for creating high-quality spaced repetition flashc
 The application uses the following environment variables:
 
 - `ANTHROPIC_API_KEY`: Required for Claude 3.7 API access
+  - Can be set in a `.env` file or as an environment variable
+  - If not set, users can still provide their API key through the web interface
 - `PORT`: Optional server port (defaults to 3000)
+
+**Note**: The application supports both server-side API key configuration (via `.env` file) and client-side API key management. Server-side configuration takes precedence if available.
+
+### API Key Configuration
+
+The application supports two ways to configure your Claude API key:
+
+1. **Server-side (Recommended for production)**
+   - Set `ANTHROPIC_API_KEY` in your `.env` file
+   - The API key is stored securely on the server
+   - Users don't need to enter their own API key
+   - Better for shared deployments or production environments
+
+2. **Client-side (Default behavior)**
+   - Users enter their API key through the web interface
+   - API key is stored in browser localStorage
+   - More flexible for individual users
+   - Works when server-side key is not configured
+
+The application automatically detects which method is available and adjusts the user interface accordingly.
 
 ## How to Use
 

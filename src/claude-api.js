@@ -63,11 +63,12 @@ function validateAnthropicApiKey(key) {
 
 /**
  * Checks if API keys are configured
- * @returns {boolean} Whether keys are available
+ * @returns {Promise<boolean>} Whether keys are available (client or server)
  */
-function hasApiKeys() {
+async function hasApiKeys() {
   const keys = getStoredApiKeys();
-  return !!keys.anthropicApiKey;
+  const serverHasApiKey = await checkServerApiKey();
+  return !!keys.anthropicApiKey || serverHasApiKey;
 }
 
 /**
@@ -168,6 +169,21 @@ function parseClaudeResponse(responseData) {
 }
 
 /**
+ * Checks if the server has an API key configured
+ * @returns {Promise<boolean>} Whether server has API key configured
+ */
+async function checkServerApiKey() {
+  try {
+    const response = await fetch('/api/server-config');
+    const config = await response.json();
+    return config.hasServerApiKey;
+  } catch (error) {
+    console.warn('Could not check server configuration:', error);
+    return false; // Assume server needs client API key as fallback
+  }
+}
+
+/**
  * Analyzes text to extract key context information
  * Returns a concise summary of the document's main points and author
  * 
@@ -179,8 +195,11 @@ async function analyzeTextWithClaude(text) {
     // Get stored API key
     const { anthropicApiKey } = getStoredApiKeys();
     
-    // Check if we have an API key
-    if (!anthropicApiKey) {
+    // Check if server has API key configured
+    const serverHasApiKey = await checkServerApiKey();
+    
+    // Only require client API key if server doesn't have one
+    if (!serverHasApiKey && !anthropicApiKey) {
       throw new Error('No Claude API key available. Please add your API key in settings.');
     }
     
@@ -192,7 +211,7 @@ async function analyzeTextWithClaude(text) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           text: truncateText(text, 10000),
-          userApiKey: anthropicApiKey || null
+          userApiKey: serverHasApiKey ? null : (anthropicApiKey || null)
         })
       });
     } catch (fetchError) {
@@ -255,8 +274,11 @@ async function generateCardsWithClaude(text, deckOptions = '', textContext = '')
     // Get stored API key
     const { anthropicApiKey } = getStoredApiKeys();
     
-    // Check if we have an API key
-    if (!anthropicApiKey) {
+    // Check if server has API key configured
+    const serverHasApiKey = await checkServerApiKey();
+    
+    // Only require client API key if server doesn't have one
+    if (!serverHasApiKey && !anthropicApiKey) {
       throw new Error('No Claude API key available. Please add your API key in settings.');
     }
     
@@ -274,7 +296,7 @@ async function generateCardsWithClaude(text, deckOptions = '', textContext = '')
           text: truncateText(text),
           textContext,
           deckOptions,
-          userApiKey: anthropicApiKey || null
+          userApiKey: serverHasApiKey ? null : (anthropicApiKey || null)
         }),
         signal: controller.signal
       });
@@ -327,5 +349,6 @@ export {
   getStoredApiKeys,
   storeApiKeys,
   validateAnthropicApiKey,
-  hasApiKeys
+  hasApiKeys,
+  checkServerApiKey
 };

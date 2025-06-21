@@ -10,6 +10,25 @@ function truncateText(text, maxLength = 8000) {
   return text.substring(0, maxLength) + '... [truncated]';
 }
 
+/**
+ * Helper function to get the API key to use
+ * @param {string} userApiKey - API key provided by client
+ * @returns {string} API key to use (server-side preferred)
+ */
+function getApiKey(userApiKey) {
+  // Server-side API key takes precedence if available
+  if (process.env.ANTHROPIC_API_KEY) {
+    return process.env.ANTHROPIC_API_KEY;
+  }
+  
+  // Fall back to client-provided API key
+  if (userApiKey) {
+    return userApiKey;
+  }
+  
+  throw new Error('No API key available. Please set ANTHROPIC_API_KEY in your .env file or provide an API key in the request.');
+}
+
 // Vercel serverless function handler
 module.exports = async (req, res) => {
   // Set CORS headers
@@ -35,9 +54,8 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Text is required' });
     }
 
-    if (!userApiKey) {
-      return res.status(400).json({ error: 'No API key provided. Please add your Claude API key in settings.' });
-    }
+    // Get API key (server-side preferred, fallback to client-provided)
+    const apiKey = getApiKey(userApiKey);
     
     const truncatedText = truncateText(text, 10000);
     
@@ -58,7 +76,7 @@ ${truncatedText}`;
         url: API_CONFIG.ANTHROPIC_API_URL,
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': userApiKey,
+          'x-api-key': apiKey,
           'anthropic-version': API_CONFIG.ANTHROPIC_VERSION
         },
         data: payload,
