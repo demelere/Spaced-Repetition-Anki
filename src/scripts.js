@@ -1070,8 +1070,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 cursor: pointer;
             `;
 
-            buttonsContainer.appendChild(startFreshButton);
-            buttonsContainer.appendChild(newDeckButton);
+            // Upload TSV button
+            const uploadButton = document.createElement('button');
+            uploadButton.textContent = 'Upload TSV File';
+            uploadButton.className = 'btn btn-success';
+            uploadButton.style.cssText = `
+                padding: 10px 20px;
+                background: #28a745;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+            `;
+
+            // Create a row for the first two buttons
+            const topRow = document.createElement('div');
+            topRow.style.display = 'flex';
+            topRow.style.gap = '16px'; // Match the horizontal gap
+            topRow.appendChild(startFreshButton);
+            topRow.appendChild(newDeckButton);
+
+            // Create a row for the upload button
+            const bottomRow = document.createElement('div');
+            bottomRow.style.marginTop = '16px'; // Match the horizontal gap
+            bottomRow.appendChild(uploadButton);
+
+            buttonsContainer.appendChild(topRow);
+            buttonsContainer.appendChild(bottomRow);
 
             modalContent.appendChild(modalHeader);
             modalContent.appendChild(description);
@@ -1135,6 +1160,11 @@ document.addEventListener('DOMContentLoaded', () => {
             newDeckButton.addEventListener('click', () => {
                 document.body.removeChild(modalOverlay);
                 showNewDeckModal();
+            });
+
+            uploadButton.addEventListener('click', () => {
+                document.body.removeChild(modalOverlay);
+                showUploadModal();
             });
 
         } catch (error) {
@@ -1248,6 +1278,116 @@ document.addEventListener('DOMContentLoaded', () => {
             if (e.key === 'Enter') {
                 createButton.click();
             }
+        });
+    }
+
+    function showUploadModal() {
+        const modalOverlay = document.createElement('div');
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        `;
+
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        modalContent.style.cssText = `
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            width: 400px;
+        `;
+
+        modalContent.innerHTML = `
+            <h2 style="margin-bottom: 20px;">Upload TSV File</h2>
+            <p style="margin-bottom: 15px; color: #666;">Select a TSV file exported from Anki to import existing cards:</p>
+            <input type="file" id="tsvFileInput" accept=".tsv,.txt" style="
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                margin-bottom: 20px;
+                font-size: 16px;
+            ">
+            <div style="text-align: right;">
+                <button id="cancelUpload" style="
+                    padding: 8px 16px;
+                    margin-right: 10px;
+                    background: #6c757d;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">Cancel</button>
+                <button id="uploadTsv" style="
+                    padding: 8px 16px;
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    cursor: pointer;
+                ">Upload</button>
+            </div>
+        `;
+
+        modalOverlay.appendChild(modalContent);
+        document.body.appendChild(modalOverlay);
+
+        const fileInput = document.getElementById('tsvFileInput');
+        const uploadButton = document.getElementById('uploadTsv');
+        const cancelButton = document.getElementById('cancelUpload');
+
+        uploadButton.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                showNotification('Please select a TSV file', 'warning');
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch('/api/anki-export/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    // Load the uploaded cards into the app state
+                    state.cards = result.cards;
+                    state.currentFile = result.filename;
+                    state.isFileLoaded = true;
+                    
+                    // Update UI
+                    updateExportButtonText();
+                    renderCards();
+                    updateButtonStates();
+                    
+                    showNotification(`Uploaded ${result.cardCount} cards from ${file.name}`, 'success');
+                } else {
+                    showNotification('Error uploading file: ' + result.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error uploading TSV file:', error);
+                showNotification('Error uploading file', 'error');
+            }
+
+            document.body.removeChild(modalOverlay);
+        });
+
+        cancelButton.addEventListener('click', () => {
+            document.body.removeChild(modalOverlay);
+            showFileSelectionModal();
         });
     }
 
