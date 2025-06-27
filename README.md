@@ -107,16 +107,7 @@ The application uses the following environment variables:
 5. Click Import to add the cards to your Anki collection
 
 ## Browser Compatibility
-
-### **Advanced Mode** (Chrome, Edge, Opera)
-- True file overwriting - save button updates the same file
-- Native file dialogs - choose exactly where to save files
-- Persistent file access - remembers your file across sessions
-
-### **Compatibility Mode** (Firefox, Safari, Mobile)
-- Smart incremental naming - `Biology-2.tsv`, `Biology-3.tsv`
-- Full functionality - same workflow, different file handling
-- Clear feedback - notifications explain file naming behavior
+Chrome, Edge, and Opera support advanced features including true file overwriting, native file dialogs, and persistent file access across sessions. Firefox, Safari, and mobile browsers use compatibility mode with smart incremental naming (e.g., `Biology-2.tsv`, `Biology-3.tsv`) while maintaining full functionality and providing clear feedback about file handling behavior.
 
 ## Next Steps
 
