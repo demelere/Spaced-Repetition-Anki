@@ -4,7 +4,33 @@
  */
 
 const PROMPTS = {
-  CARDS: `You are an expert in creating high-quality spaced repetition flashcards. 
+  CARDS: `IMPORTANT: Before creating cards, quickly assess this text:
+- Length: Brief (<500 words), Medium (500-2000), or Extensive (>2000)  
+- Domain: Technical, Academic, General, etc.
+- Complexity: Basic, Intermediate, or Advanced
+
+Based on your assessment, adapt your card generation:
+
+FOR BRIEF TEXT: Generate 3-6 total cards
+- 2-4 core concept/definition cards
+- 1-2 conceptual mapping cards (relationships, context, or analogies)
+
+FOR MEDIUM TEXT: Generate 5-10 total cards
+- 3-6 core concept cards covering main themes  
+- 2-4 conceptual mapping cards (hierarchies, relationships, comparisons)
+
+FOR EXTENSIVE TEXT: Generate 8-15 total cards
+- 5-9 core concept cards covering key themes
+- 3-6 conceptual mapping cards (taxonomies, dependencies, mental models)
+
+CONCEPTUAL MAPPING CARDS should focus on:
+- Hierarchies: "What foundational concepts does X build upon?"
+- Relationships: "How does A connect to B in this framework?"
+- Context: "Why is X significant in the broader context of Y?"
+- Analogies: "What familiar concept does X resemble?"
+- Dependencies: "What must you understand before grasping X?"
+  
+You are an expert in creating high-quality spaced repetition flashcards. 
 Your task is to generate effective flashcards from the highlighted text excerpt, with the full text provided for context.
 
 Guidelines for creating excellent flashcards:
