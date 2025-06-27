@@ -5,28 +5,28 @@ A streamlined web application for creating high-quality spaced repetition flashc
 ## Features
 
 ### **Smart Card Generation**
-- **Intelligent Text Analysis**: Paste large documents (up to 15,000 words) and get contextual analysis
-- **Adaptive Card Creation**: Generates 3-20 cards based on text complexity and length
-- **Multiple Card Types**: Core concepts, definitions, and conceptual mapping cards (relationships, hierarchies, analogies)
-- **Real-time Editing**: Edit cards inline before saving - modify questions, answers, and deck assignments
+- Intelligent Text Analysis: Paste large documents (up to 15,000 words) and get contextual analysis
+- Adaptive Card Creation: Generates 3-20 cards based on text complexity and length
+- Multiple Card Types: Core concepts, definitions, and conceptual mapping cards (relationships, hierarchies, analogies)
+- Real-time Editing: Edit cards inline before saving - modify questions, answers, and deck assignments
 
 ### **File Management**
-- **Progressive Enhancement**: True file overwriting on modern browsers (Chrome/Edge), smart incremental naming on others
-- **Named Deck Creation**: Create custom-named TSV files with upfront file structure
-- **Existing File Loading**: Load and continue working with existing TSV files
-- **Persistent Workflow**: Save additions to the same file or create versioned copies
+- Progressive Enhancement: True file overwriting on modern browsers (Chrome/Edge), smart incremental naming on others
+- Named Deck Creation: Create custom-named TSV files with upfront file structure
+- Existing File Loading: Load and continue working with existing TSV files
+- Persistent Workflow: Save additions to the same file or create versioned copies
 
 ### **Modern User Interface**
-- **Clean, Intuitive Design**: Streamlined workflow with dropdown menu navigation
-- **Mobile-Responsive Layout**: Works seamlessly across devices
-- **Real-time Notifications**: Clear feedback for all operations
-- **Resizable Panels**: Comfortable editing with adjustable text/card areas
-- **Visual Mode Indicators**: Shows whether true file overwriting or incremental naming is active
+- Clean, Intuitive Design: Streamlined workflow with dropdown menu navigation
+- Mobile-Responsive Layout: Works seamlessly across devices
+- Real-time Notifications: Clear feedback for all operations
+- Resizable Panels: Comfortable editing with adjustable text/card areas
+- Visual Mode Indicators: Shows whether true file overwriting or incremental naming is active
 
 ### **Export & Integration**
-- **TSV Format**: Direct compatibility with Anki import
-- **Markdown Fallback**: Alternative export format when needed
-- **Deck Organization**: Automatic categorization with editable deck assignments
+- TSV Format: Direct compatibility with Anki import
+- Markdown Fallback: Alternative export format when needed
+- Deck Organization: Automatic categorization with editable deck assignments
 
 ## Getting Started
 
@@ -109,46 +109,50 @@ The application uses the following environment variables:
 ## Browser Compatibility
 
 ### **Advanced Mode** (Chrome, Edge, Opera)
-- ✅ True file overwriting - save button updates the same file
-- ✅ Native file dialogs - choose exactly where to save files
-- ✅ Persistent file access - remembers your file across sessions
+- True file overwriting - save button updates the same file
+- Native file dialogs - choose exactly where to save files
+- Persistent file access - remembers your file across sessions
 
 ### **Compatibility Mode** (Firefox, Safari, Mobile)
-- ✅ Smart incremental naming - `Biology-2.tsv`, `Biology-3.tsv`
-- ✅ Full functionality - same workflow, different file handling
-- ✅ Clear feedback - notifications explain file naming behavior
+- Smart incremental naming - `Biology-2.tsv`, `Biology-3.tsv`
+- Full functionality - same workflow, different file handling
+- Clear feedback - notifications explain file naming behavior
 
 ## Next Steps
 
 ### **Enhanced Question Types**
 Currently, the application focuses on basic knowledge and definition cards. To improve learning effectiveness and prevent cognitive plateaus, we plan to expand question types across Bloom's Taxonomy levels:
 
-- **Comprehension**: "Explain why X works" or "Summarize the relationship between A and B"
-- **Application**: "How would you use X in scenario Y?" or "What steps would you take to..."
-- **Analysis**: "Compare and contrast X vs Y" or "What are the dependencies between..."
-- **Evaluation**: "What are the trade-offs of approach X?" or "When would method A be better than B?"
+- Comprehension: "Explain why X works" or "Summarize the relationship between A and B"
+- Application: "How would you use X in scenario Y?" or "What steps would you take to..."
+- Analysis: "Compare and contrast X vs Y" or "What are the dependencies between..."
+- Evaluation: "What are the trade-offs of approach X?" or "When would method A be better than B?"
 
 ### **Agent-Based Architecture**
 To handle this cognitive complexity, we're exploring specialized AI agents:
-- **Question Type Strategist**: Determines optimal cognitive level distribution
-- **Domain Expert Agent**: Understands subject-specific relationships
-- **Bloom's Taxonomy Specialist**: Crafts questions targeting specific cognitive levels
-- **Learning Science Agent**: Ensures appropriate difficulty progression
+- Question Type Strategist: Determines optimal cognitive level distribution
+- Domain Expert Agent: Understands subject-specific relationships
+- Bloom's Taxonomy Specialist: Crafts questions targeting specific cognitive levels
+- Learning Science Agent: Ensures appropriate difficulty progression
 
 Implementation will likely use frameworks like KaibanJS or AgenticJS for agent orchestration.
 
 ### **Advanced Card Management UI**
 Enhanced interface features for granular control:
-- **Individual Card Actions**: Select specific cards to modify, expand, or change question types
-- **Subset Text Processing**: Highlight portions of input text for targeted card generation
-- **Context Expansion**: Generate additional cards that broaden or deepen understanding of selected concepts
-- **Question Type Toggle**: Convert existing cards between different cognitive levels
-- **Batch Operations**: Apply changes to multiple cards simultaneously
+- Individual Card Actions: Select specific cards to modify, expand, or change question types
+- Subset Text Processing: Highlight portions of input text for targeted card generation
+- Context Expansion: Generate additional cards that broaden or deepen understanding of selected concepts
+- Question Type Toggle: Convert existing cards between different cognitive levels
+- Batch Operations: Apply changes to multiple cards simultaneously
 
 ### **Learning Analytics**
-- **Performance Tracking**: Monitor which question types are most effective
-- **Adaptive Difficulty**: Adjust question complexity based on user mastery
-- **Spaced Repetition Optimization**: Intelligent scheduling recommendations
+- Performance Tracking: Monitor which question types are most effective
+- Adaptive Difficulty: Adjust question complexity based on user mastery
+- Spaced Repetition Optimization: Intelligent scheduling recommendations
+
+### **Specialized Use Cases & Workflows**
+Tailored experiences for different learning modalities and information sources:
+- Language Learning: Vocabulary acquisition, grammar patterns, cultural context
 
 ## Design Principles
 
