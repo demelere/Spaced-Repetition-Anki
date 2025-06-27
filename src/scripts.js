@@ -1091,26 +1091,8 @@ document.addEventListener('DOMContentLoaded', () => {
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         `;
 
-        // Create mode indicator
-        const modeText = state.supportsFileSystemAPI 
-            ? '✅ Advanced Mode: True file overwriting supported'
-            : '⚠️ Compatibility Mode: Files will be incrementally named';
-        
-        const modeColor = state.supportsFileSystemAPI ? '#28a745' : '#ffc107';
-
         modalContent.innerHTML = `
             <h2 style="margin-bottom: 15px; color: #333;">Choose Your Deck</h2>
-            <div style="
-                margin-bottom: 20px; 
-                padding: 10px; 
-                background: ${modeColor}20; 
-                border-left: 4px solid ${modeColor}; 
-                border-radius: 4px;
-                font-size: 14px;
-                color: #333;
-            ">
-                ${modeText}
-            </div>
             <p style="margin-bottom: 30px; color: #666; line-height: 1.5;">
                 Create a new flashcard deck or load an existing one from a TSV file.
             </p>
