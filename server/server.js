@@ -19,7 +19,6 @@ try {
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const fs = require('fs');
 const fetch = require('node-fetch');
 
 // Import shared prompts and API configuration
@@ -61,9 +60,10 @@ function truncateText(text, maxLength = 8000) {
  * @param {string} userPrompt - User prompt
  * @param {string} apiKey - Claude API key
  * @param {number} maxTokens - Maximum tokens for response
+ * @param {number} timeout - Timeout in milliseconds (default: 30 seconds)
  * @returns {Promise<Object>} Claude API response
  */
-async function callClaudeApi(systemPrompt, userPrompt, apiKey, maxTokens = 4000) {
+async function callClaudeApi(systemPrompt, userPrompt, apiKey, maxTokens = 4000, timeout = 30000) {
   if (!apiKey) {
     throw new Error('API key not configured. Please provide a Claude API key.');
   }
@@ -79,11 +79,12 @@ async function callClaudeApi(systemPrompt, userPrompt, apiKey, maxTokens = 4000)
   console.log(`\n===== CLAUDE API REQUEST =====`);
   console.log('SYSTEM:', systemPrompt.substring(0, 100) + '...');
   console.log('USER PROMPT:', userPrompt.substring(0, 100) + '...');
+  console.log('TIMEOUT:', timeout + 'ms');
   console.log('==============================\n');
 
-  // Set timeout for Vercel serverless functions (10 seconds)
+  // Set timeout for API request
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 10000); 
+  const timeoutId = setTimeout(() => controller.abort(), timeout); 
 
   try {
     const response = await fetch(API_CONFIG.ANTHROPIC_API_URL, {
@@ -113,7 +114,7 @@ async function callClaudeApi(systemPrompt, userPrompt, apiKey, maxTokens = 4000)
     return response.json();
   } catch (error) {
     if (error.name === 'AbortError') {
-      throw new Error('Claude API request timed out. Try again or use a smaller text selection.');
+      throw new Error(`Claude API request timed out after ${timeout/1000} seconds. Try again or use a smaller text selection.`);
     }
     throw error;
   }
@@ -160,7 +161,8 @@ app.post('/api/analyze-text', async (req, res) => {
     // Use user-provided API key only
     const apiKey = getApiKey(userApiKey);
     
-    const truncatedText = truncateText(text, 10000);
+    // Truncate text to handle up to 15,000 words (approximately 75,000 characters)
+    const truncatedText = truncateText(text, 75000);
     
     const userPrompt = `Please analyze this text and provide a concise contextual summary (1-2 paragraphs maximum):
 
@@ -170,7 +172,8 @@ ${truncatedText}`;
       API_CONFIG.PROMPTS.ANALYSIS, 
       userPrompt, 
       apiKey, 
-      1000
+      1000,
+      30000 // 30 second timeout for large text analysis
     );
     
     res.json(claudeResponse);
@@ -194,6 +197,10 @@ app.post('/api/generate-cards', async (req, res) => {
     // Use user-provided API key only
     const apiKey = getApiKey(userApiKey);
     
+    // Truncate text to handle up to 15,000 words (approximately 75,000 characters)
+    const truncatedText = truncateText(text, 75000);
+    const truncatedContext = textContext ? truncateText(textContext, 50000) : '';
+    
     const userPrompt = `Please create spaced repetition flashcards from the SELECTED TEXT below.
 Use the guidelines from the system prompt.
 
@@ -202,16 +209,17 @@ Available deck categories: ${deckOptions || Object.keys(req.body.deckMap || {}).
 Remember to return ONLY a valid JSON array of flashcard objects matching the required format.
 
 PRIMARY FOCUS - Selected Text (create cards from this):
-${truncateText(text)}
+${truncatedText}
 
-${textContext ? `OPTIONAL BACKGROUND - Document Context (extract any relevant context from this to make your cards standalone):
-${textContext}` : ''}`;
+${truncatedContext ? `OPTIONAL BACKGROUND - Document Context (extract any relevant context from this to make your cards standalone):
+${truncatedContext}` : ''}`;
     
     const claudeResponse = await callClaudeApi(
       API_CONFIG.PROMPTS.CARDS, 
       userPrompt, 
       apiKey, 
-      4000
+      4000,
+      60000 // 60 second timeout for large text card generation
     );
     
     // Log the response for debugging
@@ -334,206 +342,7 @@ app.get('/api/server-status', (req, res) => {
   });
 });
 
-// ANKI EXPORT ENDPOINTS
-
-// API endpoint for Anki TSV export with persistence
-app.post('/api/anki-export', async (req, res) => {
-  try {
-    const { cards, append = true, filename: requestedFilename } = req.body;
-    
-    if (!cards || !Array.isArray(cards)) {
-      return res.status(400).json({ error: 'Cards array is required' });
-    }
-
-    // Format cards for Anki (TSV format)
-    const ankiCards = cards.map(card => {
-      // Escape tabs and newlines in card content
-      const front = (card.front || '').replace(/\t/g, ' ').replace(/\n/g, '<br>');
-      const back = (card.back || '').replace(/\t/g, ' ').replace(/\n/g, '<br>');
-      const deck = card.deck || 'Default';
-      
-      return `${front}\t${back}\t${deck}`;
-    });
-
-    // Determine filename
-    let filename;
-    if (requestedFilename) {
-      filename = requestedFilename;
-    } else {
-      const dateStr = new Date().toISOString().slice(0, 10);
-      filename = `anki-cards-${dateStr}.txt`;
-    }
-
-    const filepath = path.join(__dirname, '..', 'exports', filename);
-
-    // Ensure exports directory exists
-    const exportsDir = path.join(__dirname, '..', 'exports');
-    if (!fs.existsSync(exportsDir)) {
-      fs.mkdirSync(exportsDir, { recursive: true });
-    }
-
-    let tsvContent;
-    let isNewFile = false;
-
-    if (append && fs.existsSync(filepath)) {
-      // File exists, append to it
-      const existingContent = fs.readFileSync(filepath, 'utf8');
-      tsvContent = existingContent + ankiCards.join('\n') + '\n';
-    } else {
-      // New file or not appending
-      isNewFile = true;
-      tsvContent = 'Front\tBack\tDeck\n' + ankiCards.join('\n') + '\n';
-    }
-
-    // Write to persistent file
-    fs.writeFileSync(filepath, tsvContent);
-
-    console.log(`${isNewFile ? 'Created' : 'Updated'} Anki export file: ${filename} with ${cards.length} cards`);
-
-    return res.status(200).json({
-      success: true,
-      content: tsvContent,
-      format: 'tsv',
-      cardCount: cards.length,
-      filename: filename,
-      filepath: filepath,
-      appended: append && !isNewFile
-    });
-
-  } catch (error) {
-    console.error('Server error during Anki export:', error);
-    return res.status(500).json({ error: `Unexpected error: ${error.message}` });
-  }
-});
-
-// API endpoint to get info about existing export files
-app.get('/api/anki-export', (req, res) => {
-  try {
-    const exportsDir = path.join(__dirname, '..', 'exports');
-    
-    if (!fs.existsSync(exportsDir)) {
-      return res.status(200).json({
-        success: true,
-        files: [],
-        message: 'No export files yet'
-      });
-    }
-
-    const files = fs.readdirSync(exportsDir)
-      .filter(file => file.startsWith('anki-cards-') && file.endsWith('.txt'))
-      .map(file => {
-        const filepath = path.join(exportsDir, file);
-        const stats = fs.statSync(filepath);
-        const content = fs.readFileSync(filepath, 'utf8');
-        const lines = content.split('\n').filter(line => line.trim());
-        const cardCount = Math.max(0, lines.length - 1); // Subtract header row
-
-        return {
-          filename: file,
-          size: stats.size,
-          created: stats.birthtime,
-          modified: stats.mtime,
-          cardCount: cardCount
-        };
-      })
-      .sort((a, b) => b.modified - a.modified); // Most recent first
-
-    return res.status(200).json({
-      success: true,
-      files: files,
-      supportedFormats: ['tsv', 'txt']
-    });
-
-  } catch (error) {
-    console.error('Error listing export files:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to load cards from an existing export file
-app.get('/api/anki-export/:filename', (req, res) => {
-  try {
-    const { filename } = req.params;
-    const filepath = path.join(__dirname, '..', 'exports', filename);
-
-    if (!fs.existsSync(filepath)) {
-      return res.status(404).json({ error: 'File not found' });
-    }
-
-    const content = fs.readFileSync(filepath, 'utf8');
-    const lines = content.split('\n').filter(line => line.trim());
-    
-    if (lines.length <= 1) {
-      return res.status(200).json({
-        success: true,
-        filename: filename,
-        cards: [],
-        cardCount: 0
-      });
-    }
-
-    // Parse TSV content (skip header row)
-    const cards = lines.slice(1).map((line, index) => {
-      const [front, back, deck] = line.split('\t');
-      return {
-        id: `${filename}-${index}`,
-        front: front?.replace(/<br>/g, '\n') || '',
-        back: back?.replace(/<br>/g, '\n') || '',
-        deck: deck || 'Default'
-      };
-    });
-
-    return res.status(200).json({
-      success: true,
-      filename: filename,
-      cards: cards,
-      cardCount: cards.length
-    });
-
-  } catch (error) {
-    console.error('Error loading export file:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
-
-// API endpoint to create a new export file with custom name
-app.post('/api/anki-export/new', (req, res) => {
-  try {
-    const { filename } = req.body;
-    
-    if (!filename) {
-      return res.status(400).json({ error: 'Filename is required' });
-    }
-
-    // Sanitize filename
-    const sanitizedFilename = filename.replace(/[^a-zA-Z0-9-_]/g, '-') + '.txt';
-    const filepath = path.join(__dirname, '..', 'exports', sanitizedFilename);
-
-    // Ensure exports directory exists
-    const exportsDir = path.join(__dirname, '..', 'exports');
-    if (!fs.existsSync(exportsDir)) {
-      fs.mkdirSync(exportsDir, { recursive: true });
-    }
-
-    // Create new file with just headers
-    const tsvContent = 'Front\tBack\tDeck\n';
-    fs.writeFileSync(filepath, tsvContent);
-
-    console.log(`Created new Anki export file: ${sanitizedFilename}`);
-
-    return res.status(200).json({
-      success: true,
-      filename: sanitizedFilename,
-      filepath: filepath,
-      cards: [],
-      cardCount: 0
-    });
-
-  } catch (error) {
-    console.error('Error creating new export file:', error);
-    return res.status(500).json({ error: error.message });
-  }
-});
+// REMOVED: Anki export endpoints - now using client-side TSV export only
 
 // API endpoint for direct Mochi integration
 app.post('/api/upload-to-mochi', async (req, res) => {

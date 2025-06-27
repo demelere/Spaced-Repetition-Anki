@@ -57,7 +57,9 @@ module.exports = async (req, res) => {
     // Get API key (server-side preferred, fallback to client-provided)
     const apiKey = getApiKey(userApiKey);
     
-    const truncatedText = truncateText(text, 8000);
+    // Truncate text to handle up to 15,000 words (approximately 75,000 characters)
+    const truncatedText = truncateText(text, 75000);
+    const truncatedContext = textContext ? truncateText(textContext, 50000) : '';
     
     const userPrompt = `Please create spaced repetition flashcards from the SELECTED TEXT below.
 Use the guidelines from the system prompt.
@@ -69,8 +71,8 @@ Remember to return ONLY a valid JSON array of flashcard objects matching the req
 PRIMARY FOCUS - Selected Text (create cards from this):
 ${truncatedText}
 
-${textContext ? `OPTIONAL BACKGROUND - Document Context (extract any relevant context from this to make your cards standalone):
-${truncateText(textContext, 1500)}` : ''}`;
+${truncatedContext ? `OPTIONAL BACKGROUND - Document Context (extract any relevant context from this to make your cards standalone):
+${truncatedContext}` : ''}`;
 
     const payload = {
       model: API_CONFIG.CLAUDE_MODEL,
@@ -97,7 +99,10 @@ ${truncateText(textContext, 1500)}` : ''}`;
     } catch (apiError) {
       // Handle axios errors
       if (apiError.code === 'ECONNABORTED') {
-        return res.status(504).json({ error: 'Request to Claude API timed out. Try a smaller text selection.' });
+        return res.status(504).json({ 
+          error: 'Request to Claude API timed out after 9 seconds. This can happen with very complex or lengthy text processing.',
+          suggestion: 'For best results with large texts, try breaking them into sections of 5,000-10,000 words each.'
+        });
       }
       
       if (apiError.response) {

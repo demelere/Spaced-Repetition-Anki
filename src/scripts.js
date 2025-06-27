@@ -38,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const state = {
         cards: [],
         selectedText: '',
-        currentDeck: null,
+        currentDeck: 'General',
         decks: {},
         documentContext: '',
         isAnalyzing: false,
@@ -47,7 +47,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // File management properties
         currentFile: null,
         availableFiles: [],
-        isFileLoaded: false
+        isFileLoaded: false,
+        isFirstSave: true,
+        fileHandle: null, // For File System Access API
+        supportsFileSystemAPI: 'showSaveFilePicker' in window
     };
     
     // Toggle dropdown menu when menu button is clicked
@@ -161,9 +164,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateExportButtonText() {
         const exportButton = document.getElementById('exportButton');
         if (state.isFileLoaded && state.currentFile) {
-            exportButton.textContent = 'Add to Anki Deck';
+            exportButton.textContent = `Save to ${state.currentFile}`;
         } else {
-            exportButton.textContent = 'Export to Anki';
+            exportButton.textContent = 'Save';
         }
     }
     
@@ -281,7 +284,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Update export button text
         const exportButton = document.getElementById('exportButton');
         if (exportButton) {
-            exportButton.textContent = 'Export to Anki';
+            exportButton.textContent = 'Save';
         }
         
         // Create deck selector dropdown
@@ -512,6 +515,33 @@ document.addEventListener('DOMContentLoaded', () => {
             state.fromPaste = false;
         } catch (error) {
             console.error('Error analyzing document:', error);
+            
+            // Check if the error response has detailed information
+            let errorMessage = 'Error analyzing text: ';
+            
+            if (error.response && error.response.data) {
+                const errorData = error.response.data;
+                errorMessage = errorData.error || errorData.message || 'Unknown error occurred';
+                
+                // If there's a suggestion, include it
+                if (errorData.suggestion) {
+                    errorMessage += `\n\nSuggestion: ${errorData.suggestion}`;
+                }
+            } else if (error.message) {
+                // Provide a more specific message for timeout errors
+                if (error.message.includes('FUNCTION_INVOCATION_TIMEOUT')) {
+                    errorMessage = 'The request timed out. This can happen with very complex or lengthy text processing.';
+                } else if (error.message.includes('timed out')) {
+                    errorMessage = 'The request timed out. This can happen with very complex or lengthy text processing.';
+                } else {
+                    errorMessage += error.message;
+                }
+            } else {
+                errorMessage += 'Please try again.';
+            }
+            
+            // Show error notification but don't be too disruptive for analysis errors
+            showNotification(errorMessage, 'error', 5000);
         } finally {
             // Reset analyzing state
             state.isAnalyzing = false;
@@ -568,14 +598,31 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error('Error generating cards:', error);
             
+            // Check if the error response has detailed information
+            let errorMessage = 'Error generating cards: ';
+            
+            if (error.response && error.response.data) {
+                const errorData = error.response.data;
+                errorMessage = errorData.error || errorData.message || 'Unknown error occurred';
+                
+                // If there's a suggestion, include it
+                if (errorData.suggestion) {
+                    errorMessage += `\n\nSuggestion: ${errorData.suggestion}`;
+                }
+            } else if (error.message) {
             // Provide a more specific message for timeout errors
-            if (error.message && error.message.includes('FUNCTION_INVOCATION_TIMEOUT')) {
-                showNotification('The request timed out. Please select a smaller portion of text and try again.', 'error');
-            } else if (error.message && error.message.includes('timed out')) {
-                showNotification('The request timed out. Please select a smaller portion of text and try again.', 'error');
+                if (error.message.includes('FUNCTION_INVOCATION_TIMEOUT')) {
+                    errorMessage = 'The request timed out. This can happen with very complex or lengthy text processing.';
+                } else if (error.message.includes('timed out')) {
+                    errorMessage = 'The request timed out. This can happen with very complex or lengthy text processing.';
             } else {
-                showNotification('Error generating cards: ' + (error.message || 'Please try again.'), 'error');
+                    errorMessage += error.message;
             }
+            } else {
+                errorMessage += 'Please try again.';
+            }
+            
+            showNotification(errorMessage, 'error');
         } finally {
             generateButton.disabled = false;
             generateButton.textContent = 'Create Cards';
@@ -819,80 +866,107 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             // Check if we have any cards to export
             if (state.cards.length === 0) {
-                showNotification('No cards to export', 'info');
+                showNotification('No cards to save', 'info');
                 return;
             }
             
             // Show loading indicator
             exportButton.disabled = true;
             const originalText = exportButton.textContent;
-            exportButton.textContent = 'Preparing Export...';
+            exportButton.textContent = 'Saving...';
             
-            // Prepare request body
-            const requestBody = { 
-                cards: state.cards,
-                append: true
-            };
-
-            // If we have a current file, use it
-            if (state.currentFile) {
-                requestBody.filename = state.currentFile;
+            // Try File System Access API first, fallback to download
+            if (state.supportsFileSystemAPI && state.fileHandle) {
+                try {
+                    await saveCardsWithFSA();
+                    return; // Success with FSA, exit early
+                } catch (fsaError) {
+                    console.warn('FSA save failed, falling back to download:', fsaError);
+                    // Continue to fallback method below
+                }
             }
             
-            // Use the server endpoint to format cards for Anki
-            const response = await fetch('/api/anki-export', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify(requestBody)
-            });
-            
-            if (!response.ok) {
-                throw new Error('Failed to format cards for Anki');
-            }
-            
-            const result = await response.json();
-            
-            // Update current file if we created a new one
-            if (!state.currentFile) {
-                state.currentFile = result.filename;
-                state.isFileLoaded = true;
-                updateExportButtonText();
-            }
-            
-            // Download the TSV file
-            const blob = new Blob([result.content], { type: 'text/tab-separated-values' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = result.filename;
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            
-            // Cleanup
-            setTimeout(() => {
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 100);
-            
-            // Success notification
-            const message = result.appended 
-                ? `${result.cardCount} cards appended to ${result.filename}!`
-                : `${result.cardCount} cards exported to new file ${result.filename}!`;
-            showNotification(message, 'success');
+            // Fallback: Use download method with incrementing
+            await exportToAnkiFallback();
             
         } catch (error) {
-            console.error('Error exporting to Anki:', error);
-            showNotification('Error exporting to Anki. Exporting as markdown instead.', 'error');
-            
-            // Fall back to markdown export
-            exportAsMarkdown();
+            console.error('Error saving cards:', error);
+            showNotification('Error saving cards. Try again.', 'error');
         } finally {
             // Reset button state
             exportButton.disabled = false;
             updateExportButtonText();
+        }
+    }
+
+    async function exportToAnkiFallback() {
+        // Format cards as TSV
+        const tsvContent = formatCardsAsTSV(state.cards);
+        
+        // Determine filename with intelligent incrementing
+        let filename;
+        let isIncremented = false;
+        if (state.currentFile) {
+            if (state.isFirstSave) {
+                // First save after creating new deck - use original filename
+                filename = state.currentFile;
+                state.isFirstSave = false; // Mark that we've done the first save
+            } else {
+                // Subsequent saves - increment the filename
+                filename = getIncrementedFilename(state.currentFile);
+                isIncremented = true;
+            }
+        } else {
+            // Fallback for new files
+            filename = `flashcards-${new Date().toISOString().slice(0, 10)}.tsv`;
+        }
+        
+        // Update the current file to the new incremented name
+        state.currentFile = filename;
+        
+        // Download the TSV file
+        const blob = new Blob([tsvContent], { type: 'text/tab-separated-values' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        
+        // Cleanup
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+        // Update UI to reflect new filename
+        updateExportButtonText();
+        
+        // Success notification
+        if (isIncremented) {
+            showNotification(`${state.cards.length} cards saved to ${filename} (incremented to avoid overwriting)`, 'success');
+        } else {
+            showNotification(`${state.cards.length} cards saved to ${filename}!`, 'success');
+        }
+    }
+
+    function getIncrementedFilename(currentFilename) {
+        // Remove extension
+        const ext = currentFilename.includes('.') ? '.' + currentFilename.split('.').pop() : '.tsv';
+        const nameWithoutExt = currentFilename.replace(/\.[^/.]+$/, '');
+        
+        // Check if filename already has a number suffix like "-2"
+        const numberMatch = nameWithoutExt.match(/^(.+)-(\d+)$/);
+        
+        if (numberMatch) {
+            // File already has a number, increment it
+            const baseName = numberMatch[1];
+            const currentNumber = parseInt(numberMatch[2]);
+            return `${baseName}-${currentNumber + 1}${ext}`;
+        } else {
+            // File doesn't have a number, add "-2"
+            return `${nameWithoutExt}-2${ext}`;
         }
     }
     
@@ -990,188 +1064,99 @@ document.addEventListener('DOMContentLoaded', () => {
     // ===== FILE MANAGEMENT FUNCTIONS =====
 
     async function showFileSelectionModal() {
-        try {
-            // Fetch available files
-            const response = await fetch('/api/anki-export');
-            const data = await response.json();
+        // Create modal
+        const modalOverlay = document.createElement('div');
+        modalOverlay.className = 'modal-overlay';
+        modalOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        `;
+
+        const modalContent = document.createElement('div');
+        modalContent.className = 'modal-content';
+        modalContent.style.cssText = `
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            width: 450px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        `;
+
+        // Create mode indicator
+        const modeText = state.supportsFileSystemAPI 
+            ? '✅ Advanced Mode: True file overwriting supported'
+            : '⚠️ Compatibility Mode: Files will be incrementally named';
+        
+        const modeColor = state.supportsFileSystemAPI ? '#28a745' : '#ffc107';
+
+        modalContent.innerHTML = `
+            <h2 style="margin-bottom: 15px; color: #333;">Choose Your Deck</h2>
+            <div style="
+                margin-bottom: 20px; 
+                padding: 10px; 
+                background: ${modeColor}20; 
+                border-left: 4px solid ${modeColor}; 
+                border-radius: 4px;
+                font-size: 14px;
+                color: #333;
+            ">
+                ${modeText}
+            </div>
+            <p style="margin-bottom: 30px; color: #666; line-height: 1.5;">
+                Create a new flashcard deck or load an existing one from a TSV file.
+            </p>
             
-            if (!data.success) {
-                console.error('Failed to fetch files:', data.error);
-                showNotification('Error loading files. Starting fresh session.', 'warning');
-                return;
-            }
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                <button id="createNewDeck" style="
+                    padding: 15px 20px;
+                    background: #007bff;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    cursor: pointer;
+                    transition: background-color 0.2s;
+                " onmouseover="this.style.backgroundColor='#0056b3'" onmouseout="this.style.backgroundColor='#007bff'">
+                    🆕 Create New Named Deck
+                </button>
+                
+                <button id="loadExistingDeck" style="
+                    padding: 15px 20px;
+                    background: #28a745;
+                    color: white;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    cursor: pointer;
+                    transition: background-color 0.2s;
+                " onmouseover="this.style.backgroundColor='#1e7e34'" onmouseout="this.style.backgroundColor='#28a745'">
+                    📁 Load Existing TSV File
+                </button>
+            </div>
+        `;
 
-            state.availableFiles = data.files;
+        modalOverlay.appendChild(modalContent);
+        document.body.appendChild(modalOverlay);
 
-            // Create modal
-            const modalOverlay = document.createElement('div');
-            modalOverlay.className = 'modal-overlay';
-            modalOverlay.style.cssText = `
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                background: rgba(0, 0, 0, 0.5);
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                z-index: 1000;
-            `;
+        // Add event listeners
+        document.getElementById('createNewDeck').addEventListener('click', () => {
+            document.body.removeChild(modalOverlay);
+            showNewDeckModal();
+        });
 
-            const modalContent = document.createElement('div');
-            modalContent.className = 'modal-content';
-            modalContent.style.cssText = `
-                background: white;
-                padding: 30px;
-                border-radius: 8px;
-                width: 500px;
-                max-height: 80vh;
-                overflow-y: auto;
-            `;
-
-            const modalHeader = document.createElement('h2');
-            modalHeader.textContent = 'Load Anki Deck or Start Fresh';
-            modalHeader.style.marginBottom = '20px';
-
-            const description = document.createElement('p');
-            description.textContent = 'Choose an existing deck to continue adding cards, or start a new deck.';
-            description.style.marginBottom = '20px';
-            description.style.color = '#666';
-
-            const buttonsContainer = document.createElement('div');
-            buttonsContainer.style.marginBottom = '20px';
-
-            // Start Fresh button
-            const startFreshButton = document.createElement('button');
-            startFreshButton.textContent = 'Start Fresh Deck';
-            startFreshButton.className = 'btn btn-primary';
-            startFreshButton.style.cssText = `
-                padding: 10px 20px;
-                margin-right: 10px;
-                background: #007bff;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-            `;
-
-            // New Deck button
-            const newDeckButton = document.createElement('button');
-            newDeckButton.textContent = 'Create Named Deck';
-            newDeckButton.className = 'btn btn-secondary';
-            newDeckButton.style.cssText = `
-                padding: 10px 20px;
-                margin-right: 10px;
-                background: #6c757d;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-            `;
-
-            // Upload TSV button
-            const uploadButton = document.createElement('button');
-            uploadButton.textContent = 'Upload TSV File';
-            uploadButton.className = 'btn btn-success';
-            uploadButton.style.cssText = `
-                padding: 10px 20px;
-                background: #28a745;
-                color: white;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-            `;
-
-            // Create a row for the first two buttons
-            const topRow = document.createElement('div');
-            topRow.style.display = 'flex';
-            topRow.style.gap = '16px'; // Match the horizontal gap
-            topRow.appendChild(startFreshButton);
-            topRow.appendChild(newDeckButton);
-
-            // Create a row for the upload button
-            const bottomRow = document.createElement('div');
-            bottomRow.style.marginTop = '16px'; // Match the horizontal gap
-            bottomRow.appendChild(uploadButton);
-
-            buttonsContainer.appendChild(topRow);
-            buttonsContainer.appendChild(bottomRow);
-
-            modalContent.appendChild(modalHeader);
-            modalContent.appendChild(description);
-            modalContent.appendChild(buttonsContainer);
-
-            // Existing files section
-            if (state.availableFiles.length > 0) {
-                const existingHeader = document.createElement('h3');
-                existingHeader.textContent = 'Or load an existing deck:';
-                existingHeader.style.cssText = 'margin: 20px 0 10px 0; border-top: 1px solid #eee; padding-top: 20px;';
-
-                const filesList = document.createElement('div');
-                filesList.style.cssText = 'max-height: 200px; overflow-y: auto;';
-
-                state.availableFiles.forEach(file => {
-                    const fileItem = document.createElement('div');
-                    fileItem.className = 'file-item';
-                    fileItem.style.cssText = `
-                        padding: 10px;
-                        border: 1px solid #ddd;
-                        margin-bottom: 5px;
-                        border-radius: 4px;
-                        cursor: pointer;
-                        transition: background-color 0.2s;
-                    `;
-
-                    fileItem.innerHTML = `
-                        <strong>${file.filename}</strong><br>
-                        <small>Cards: ${file.cardCount} | Modified: ${new Date(file.modified).toLocaleDateString()}</small>
-                    `;
-
-                    fileItem.addEventListener('mouseover', () => {
-                        fileItem.style.backgroundColor = '#f8f9fa';
-                    });
-
-                    fileItem.addEventListener('mouseout', () => {
-                        fileItem.style.backgroundColor = 'white';
-                    });
-
-                    fileItem.addEventListener('click', () => {
-                        loadExistingFile(file.filename);
-                        document.body.removeChild(modalOverlay);
-                    });
-
-                    filesList.appendChild(fileItem);
-                });
-
-                modalContent.appendChild(existingHeader);
-                modalContent.appendChild(filesList);
-            }
-
-            modalOverlay.appendChild(modalContent);
-            document.body.appendChild(modalOverlay);
-
-            // Event listeners
-            startFreshButton.addEventListener('click', () => {
-                startFreshSession();
-                document.body.removeChild(modalOverlay);
-            });
-
-            newDeckButton.addEventListener('click', () => {
-                document.body.removeChild(modalOverlay);
-                showNewDeckModal();
-            });
-
-            uploadButton.addEventListener('click', () => {
-                document.body.removeChild(modalOverlay);
-                showUploadModal();
-            });
-
-        } catch (error) {
-            console.error('Error showing file selection modal:', error);
-            showNotification('Error loading file selection. Starting fresh session.', 'warning');
-            startFreshSession();
-        }
+        document.getElementById('loadExistingDeck').addEventListener('click', () => {
+            document.body.removeChild(modalOverlay);
+            showLoadDeckModal();
+        });
     }
 
     function showNewDeckModal() {
@@ -1194,78 +1179,82 @@ document.addEventListener('DOMContentLoaded', () => {
         modalContent.className = 'modal-content';
         modalContent.style.cssText = `
             background: white;
-            padding: 30px;
-            border-radius: 8px;
-            width: 400px;
+            padding: 40px;
+            border-radius: 12px;
+            width: 450px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         `;
 
         modalContent.innerHTML = `
-            <h2 style="margin-bottom: 20px;">Create New Deck</h2>
-            <p style="margin-bottom: 15px; color: #666;">Enter a name for your new Anki deck:</p>
-            <input type="text" id="newDeckName" placeholder="My Study Deck" style="
+            <h2 style="margin-bottom: 15px; color: #333;">Create New Deck</h2>
+            <p style="margin-bottom: 25px; color: #666; line-height: 1.5;">
+                Enter a name for your new flashcard deck. A TSV file will be created.
+            </p>
+            
+            <input type="text" id="deckNameInput" placeholder="Enter deck name..." style="
                 width: 100%;
-                padding: 10px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                margin-bottom: 20px;
+                padding: 15px;
+                border: 2px solid #ddd;
+                border-radius: 8px;
+                margin-bottom: 25px;
                 font-size: 16px;
+                box-sizing: border-box;
             ">
-            <div style="text-align: right;">
-                <button id="cancelNewDeck" style="
-                    padding: 8px 16px;
-                    margin-right: 10px;
+            
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button id="cancelCreate" style="
+                    padding: 12px 24px;
                     background: #6c757d;
                     color: white;
                     border: none;
-                    border-radius: 4px;
+                    border-radius: 8px;
+                    font-size: 16px;
                     cursor: pointer;
-                ">Cancel</button>
-                <button id="createNewDeck" style="
-                    padding: 8px 16px;
+                    transition: background-color 0.2s;
+                " onmouseover="this.style.backgroundColor='#545b62'" onmouseout="this.style.backgroundColor='#6c757d'">
+                    Cancel
+                </button>
+                <button id="createDeck" style="
+                    padding: 12px 24px;
                     background: #007bff;
                     color: white;
                     border: none;
-                    border-radius: 4px;
+                    border-radius: 8px;
+                    font-size: 16px;
                     cursor: pointer;
-                ">Create</button>
+                    transition: background-color 0.2s;
+                " onmouseover="this.style.backgroundColor='#0056b3'" onmouseout="this.style.backgroundColor='#007bff'">
+                    Create Deck
+                </button>
             </div>
         `;
 
         modalOverlay.appendChild(modalContent);
         document.body.appendChild(modalOverlay);
 
-        const nameInput = document.getElementById('newDeckName');
-        const createButton = document.getElementById('createNewDeck');
-        const cancelButton = document.getElementById('cancelNewDeck');
+        const nameInput = document.getElementById('deckNameInput');
+        const createButton = document.getElementById('createDeck');
+        const cancelButton = document.getElementById('cancelCreate');
 
+        // Focus on input
         nameInput.focus();
 
-        createButton.addEventListener('click', async () => {
+        // Handle Enter key
+        nameInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                createButton.click();
+            }
+        });
+
+        createButton.addEventListener('click', () => {
             const deckName = nameInput.value.trim();
             if (!deckName) {
                 showNotification('Please enter a deck name', 'warning');
                 return;
             }
 
-            try {
-                const response = await fetch('/api/anki-export/new', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ filename: deckName })
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    loadExistingFile(result.filename);
-                    showNotification(`Created new deck: ${result.filename}`, 'success');
-                } else {
-                    showNotification('Error creating deck: ' + result.error, 'error');
-                }
-            } catch (error) {
-                console.error('Error creating new deck:', error);
-                showNotification('Error creating new deck', 'error');
-            }
-
+            createNewDeck(deckName);
             document.body.removeChild(modalOverlay);
         });
 
@@ -1273,15 +1262,19 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.removeChild(modalOverlay);
             showFileSelectionModal();
         });
-
-        nameInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                createButton.click();
-            }
-        });
     }
 
-    function showUploadModal() {
+    function showLoadDeckModal() {
+        if (state.supportsFileSystemAPI) {
+            // Use File System Access API directly
+            loadDeckWithFSA();
+        } else {
+            // Show file input modal for fallback
+            showLoadDeckModalFallback();
+        }
+    }
+
+    function showLoadDeckModalFallback() {
         const modalOverlay = document.createElement('div');
         modalOverlay.className = 'modal-overlay';
         modalOverlay.style.cssText = `
@@ -1301,40 +1294,55 @@ document.addEventListener('DOMContentLoaded', () => {
         modalContent.className = 'modal-content';
         modalContent.style.cssText = `
             background: white;
-            padding: 30px;
-            border-radius: 8px;
-            width: 400px;
+            padding: 40px;
+            border-radius: 12px;
+            width: 450px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
         `;
 
         modalContent.innerHTML = `
-            <h2 style="margin-bottom: 20px;">Upload TSV File</h2>
-            <p style="margin-bottom: 15px; color: #666;">Select a TSV file exported from Anki to import existing cards:</p>
+            <h2 style="margin-bottom: 15px; color: #333;">Load Existing Deck</h2>
+            <p style="margin-bottom: 25px; color: #666; line-height: 1.5;">
+                Select a TSV file from your computer to load existing flashcards.
+            </p>
+            
             <input type="file" id="tsvFileInput" accept=".tsv,.txt" style="
                 width: 100%;
-                padding: 10px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                margin-bottom: 20px;
+                padding: 15px;
+                border: 2px dashed #ddd;
+                border-radius: 8px;
+                margin-bottom: 25px;
                 font-size: 16px;
+                cursor: pointer;
+                background: #f8f9fa;
             ">
-            <div style="text-align: right;">
-                <button id="cancelUpload" style="
-                    padding: 8px 16px;
-                    margin-right: 10px;
+            
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button id="cancelLoad" style="
+                    padding: 12px 24px;
                     background: #6c757d;
                     color: white;
                     border: none;
-                    border-radius: 4px;
+                    border-radius: 8px;
+                    font-size: 16px;
                     cursor: pointer;
-                ">Cancel</button>
-                <button id="uploadTsv" style="
-                    padding: 8px 16px;
+                    transition: background-color 0.2s;
+                " onmouseover="this.style.backgroundColor='#545b62'" onmouseout="this.style.backgroundColor='#6c757d'">
+                    Cancel
+                </button>
+                <button id="loadTsv" style="
+                    padding: 12px 24px;
                     background: #28a745;
                     color: white;
                     border: none;
-                    border-radius: 4px;
+                    border-radius: 8px;
+                    font-size: 16px;
                     cursor: pointer;
-                ">Upload</button>
+                    transition: background-color 0.2s;
+                " onmouseover="this.style.backgroundColor='#1e7e34'" onmouseout="this.style.backgroundColor='#28a745'">
+                    Load Deck
+                </button>
             </div>
         `;
 
@@ -1342,46 +1350,17 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.appendChild(modalOverlay);
 
         const fileInput = document.getElementById('tsvFileInput');
-        const uploadButton = document.getElementById('uploadTsv');
-        const cancelButton = document.getElementById('cancelUpload');
+        const loadButton = document.getElementById('loadTsv');
+        const cancelButton = document.getElementById('cancelLoad');
 
-        uploadButton.addEventListener('click', async () => {
+        loadButton.addEventListener('click', () => {
             const file = fileInput.files[0];
             if (!file) {
                 showNotification('Please select a TSV file', 'warning');
                 return;
             }
 
-            try {
-                const formData = new FormData();
-                formData.append('file', file);
-
-                const response = await fetch('/api/anki-export/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    // Load the uploaded cards into the app state
-                    state.cards = result.cards;
-                    state.currentFile = result.filename;
-                    state.isFileLoaded = true;
-                    
-                    // Update UI
-                    updateExportButtonText();
-                    renderCards();
-                    updateButtonStates();
-                    
-                    showNotification(`Uploaded ${result.cardCount} cards from ${file.name}`, 'success');
-                } else {
-                    showNotification('Error uploading file: ' + result.error, 'error');
-                }
-            } catch (error) {
-                console.error('Error uploading TSV file:', error);
-                showNotification('Error uploading file', 'error');
-            }
-
+            loadTsvFile(file);
             document.body.removeChild(modalOverlay);
         });
 
@@ -1455,7 +1434,7 @@ document.addEventListener('DOMContentLoaded', () => {
         newFileOption.innerHTML = '🆕 Start New Deck';
         newFileOption.addEventListener('click', (e) => {
             e.preventDefault();
-            startFreshSession();
+            showFileSelectionModal();
             dropdown.classList.remove('show');
             menuButton.setAttribute('aria-expanded', 'false');
         });
@@ -1467,6 +1446,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize file management menu
     addFileManagementToMenu();
+
+    // Log which file system mode is active
+    if (state.supportsFileSystemAPI) {
+        console.log('🚀 File System Access API supported - true file overwriting enabled');
+    } else {
+        console.log('📁 Using fallback mode - files will be incrementally named');
+    }
 
     // Function to check server configuration
     async function checkServerConfiguration() {
@@ -1487,5 +1473,287 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn('Could not check server configuration, showing API key modal as fallback:', error);
             showApiKeyModal();
         }
+    }
+
+    function loadTsvFile(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const content = e.target.result;
+                const lines = content.trim().split('\n');
+                
+                if (lines.length === 0) {
+                    showNotification('File is empty', 'error');
+                    return;
+                }
+
+                // Parse cards from TSV format
+                const cards = [];
+                const hasHeader = lines[0].toLowerCase().includes('front') && lines[0].toLowerCase().includes('back');
+                const startIndex = hasHeader ? 1 : 0;
+
+                for (let i = startIndex; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+
+                    const parts = line.split('\t');
+                    if (parts.length >= 2) {
+                        const front = parts[0].replace(/<br>/g, '\n').trim();
+                        const back = parts[1].replace(/<br>/g, '\n').trim();
+                        const deck = parts[2] || 'General';
+
+                        if (front && back) {
+                            cards.push({
+                                front: front,
+                                back: back,
+                                deck: deck
+                            });
+                        }
+                    }
+                }
+
+                if (cards.length === 0) {
+                    showNotification('No valid cards found in the file', 'error');
+                    return;
+                }
+
+                // Update state
+                state.cards = cards;
+                state.currentFile = file.name;
+                state.isFileLoaded = true;
+                state.isFirstSave = false; // Loading existing file - next save should increment
+                state.fileHandle = null; // No file handle in fallback mode
+                
+                // Update UI
+                updateExportButtonText();
+                renderCards();
+                updateButtonStates();
+                
+                showNotification(`Loaded ${cards.length} cards from ${file.name}`, 'success');
+
+            } catch (error) {
+                console.error('Error parsing TSV file:', error);
+                showNotification('Error parsing TSV file', 'error');
+            }
+        };
+
+        reader.readAsText(file);
+    }
+
+    function createNewDeck(deckName) {
+        if (state.supportsFileSystemAPI) {
+            // Use File System Access API for true file creation
+            createNewDeckWithFSA(deckName);
+        } else {
+            // Fallback to download method
+            createNewDeckFallback(deckName);
+        }
+    }
+
+    function createNewDeckFallback(deckName) {
+        // Sanitize filename
+        const sanitizedName = deckName.replace(/[^a-zA-Z0-9-_\s]/g, '').replace(/\s+/g, '-');
+        const filename = `${sanitizedName}.tsv`;
+        
+        // Create TSV content with just headers
+        const tsvContent = 'Front\tBack\tDeck\n';
+        
+        // Download the empty TSV file to establish the file structure
+        const blob = new Blob([tsvContent], { type: 'text/tab-separated-values' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        
+        // Cleanup
+        setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }, 100);
+        
+        // Update state
+        state.cards = [];
+        state.currentFile = filename;
+        state.isFileLoaded = true;
+        state.isFirstSave = true; // Track that this is a new deck
+        state.fileHandle = null; // No file handle in fallback mode
+        
+        // Update UI
+        updateExportButtonText();
+        renderCards();
+        updateButtonStates();
+        
+        showNotification(`Created new deck: ${filename}`, 'success');
+    }
+
+    // ===== FILE SYSTEM ACCESS API FUNCTIONS =====
+
+    async function createNewDeckWithFSA(deckName) {
+        try {
+            const filename = `${deckName.replace(/[^a-zA-Z0-9-_\s]/g, '').replace(/\s+/g, '-')}.tsv`;
+            
+            // Open save dialog
+            const fileHandle = await window.showSaveFilePicker({
+                suggestedName: filename,
+                types: [{
+                    description: 'TSV files',
+                    accept: { 'text/tab-separated-values': ['.tsv'] }
+                }]
+            });
+            
+            // Create initial TSV content with headers
+            const tsvContent = 'Front\tBack\tDeck\n';
+            
+            // Write to file
+            const writable = await fileHandle.createWritable();
+            await writable.write(tsvContent);
+            await writable.close();
+            
+            // Update state
+            state.cards = [];
+            state.currentFile = fileHandle.name;
+            state.isFileLoaded = true;
+            state.isFirstSave = false; // FSA doesn't need first save tracking
+            state.fileHandle = fileHandle;
+            
+            // Update UI
+            updateExportButtonText();
+            renderCards();
+            updateButtonStates();
+            
+            showNotification(`Created new deck: ${fileHandle.name}`, 'success');
+            
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                // User cancelled
+                showNotification('Deck creation cancelled', 'info');
+            } else {
+                console.error('Error creating deck with FSA:', error);
+                showNotification('Error creating deck: ' + error.message, 'error');
+            }
+        }
+    }
+
+    async function loadDeckWithFSA() {
+        try {
+            // Open file picker
+            const [fileHandle] = await window.showOpenFilePicker({
+                types: [{
+                    description: 'TSV files',
+                    accept: { 'text/tab-separated-values': ['.tsv', '.txt'] }
+                }],
+                multiple: false
+            });
+            
+            // Read file content
+            const file = await fileHandle.getFile();
+            const content = await file.text();
+            
+            // Parse TSV content
+            const cards = parseTsvContent(content);
+            
+            if (cards.length === 0) {
+                showNotification('No valid cards found in the file', 'error');
+                return;
+            }
+            
+            // Update state
+            state.cards = cards;
+            state.currentFile = fileHandle.name;
+            state.isFileLoaded = true;
+            state.isFirstSave = false;
+            state.fileHandle = fileHandle;
+            
+            // Update UI
+            updateExportButtonText();
+            renderCards();
+            updateButtonStates();
+            
+            showNotification(`Loaded ${cards.length} cards from ${fileHandle.name}`, 'success');
+            
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                // User cancelled
+                showNotification('File loading cancelled', 'info');
+            } else {
+                console.error('Error loading deck with FSA:', error);
+                showNotification('Error loading deck: ' + error.message, 'error');
+            }
+        }
+    }
+
+    async function saveCardsWithFSA() {
+        try {
+            if (!state.fileHandle) {
+                throw new Error('No file handle available');
+            }
+            
+            // Format cards as TSV
+            const tsvContent = formatCardsAsTSV(state.cards);
+            
+            // Write to file (overwrites existing content)
+            const writable = await state.fileHandle.createWritable();
+            await writable.write(tsvContent);
+            await writable.close();
+            
+            showNotification(`${state.cards.length} cards saved to ${state.currentFile}!`, 'success');
+            
+        } catch (error) {
+            console.error('Error saving with FSA:', error);
+            showNotification('Error saving file: ' + error.message, 'error');
+            throw error; // Re-throw to trigger fallback
+        }
+    }
+
+    function parseTsvContent(content) {
+        const lines = content.trim().split('\n');
+        
+        if (lines.length === 0) {
+            return [];
+        }
+
+        const cards = [];
+        const hasHeader = lines[0].toLowerCase().includes('front') && lines[0].toLowerCase().includes('back');
+        const startIndex = hasHeader ? 1 : 0;
+
+        for (let i = startIndex; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line) continue;
+
+            const parts = line.split('\t');
+            if (parts.length >= 2) {
+                const front = parts[0].replace(/<br>/g, '\n').trim();
+                const back = parts[1].replace(/<br>/g, '\n').trim();
+                const deck = parts[2] || 'General';
+
+                if (front && back) {
+                    cards.push({
+                        front: front,
+                        back: back,
+                        deck: deck
+                    });
+                }
+            }
+        }
+
+        return cards;
+    }
+
+    function formatCardsAsTSV(cards) {
+        const tsvLines = ['Front\tBack\tDeck'];
+        
+        cards.forEach(card => {
+            // Escape tabs and newlines in card content
+            const front = (card.front || '').replace(/\t/g, ' ').replace(/\n/g, '<br>');
+            const back = (card.back || '').replace(/\t/g, ' ').replace(/\n/g, '<br>');
+            const deck = card.deck || 'General';
+            
+            tsvLines.push(`${front}\t${back}\t${deck}`);
+        });
+        
+        return tsvLines.join('\n') + '\n';
     }
 });

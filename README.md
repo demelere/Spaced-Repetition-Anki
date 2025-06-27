@@ -4,31 +4,35 @@ A streamlined web application for creating high-quality spaced repetition flashc
 
 ## Features
 
-- **Spaced Repetition Cards**
-  - Paste text and highlight sections to create flashcards
-  - Uses Claude 3.7 to generate effective cards following best practices
-  - Cards are automatically categorized into appropriate Mochi decks
-  - Edit cards inline before exporting
+### **Smart Card Generation**
+- **Intelligent Text Analysis**: Paste large documents (up to 15,000 words) and get contextual analysis
+- **Adaptive Card Creation**: Generates 3-20 cards based on text complexity and length
+- **Multiple Card Types**: Core concepts, definitions, and conceptual mapping cards (relationships, hierarchies, analogies)
+- **Real-time Editing**: Edit cards inline before saving - modify questions, answers, and deck assignments
 
-- **Anki Integration**
-  - Export cards in TSV format for easy Anki import
-  - Accumulate cards across multiple sessions in a single file
-  - Choose from predefined deck categories or create custom ones
-  - Fallback to markdown export if needed
+### **File Management**
+- **Progressive Enhancement**: True file overwriting on modern browsers (Chrome/Edge), smart incremental naming on others
+- **Named Deck Creation**: Create custom-named TSV files with upfront file structure
+- **Existing File Loading**: Load and continue working with existing TSV files
+- **Persistent Workflow**: Save additions to the same file or create versioned copies
 
-- **Modern User Interface**
-  - Clean, intuitive design with dropdown menu
-  - Mobile-responsive layout
-  - Real-time notification system
-  - Confirmation modals for destructive actions
-  - Resizable split panels for comfortable editing
-  - Compact card design for efficient space utilization
+### **Modern User Interface**
+- **Clean, Intuitive Design**: Streamlined workflow with dropdown menu navigation
+- **Mobile-Responsive Layout**: Works seamlessly across devices
+- **Real-time Notifications**: Clear feedback for all operations
+- **Resizable Panels**: Comfortable editing with adjustable text/card areas
+- **Visual Mode Indicators**: Shows whether true file overwriting or incremental naming is active
+
+### **Export & Integration**
+- **TSV Format**: Direct compatibility with Anki import
+- **Markdown Fallback**: Alternative export format when needed
+- **Deck Organization**: Automatic categorization with editable deck assignments
 
 ## Getting Started
 
 ### Prerequisites
 
-- Modern web browser
+- Modern web browser (Chrome/Edge recommended for advanced file features)
 - Claude API key from Anthropic
 - Anki desktop application (to import the generated cards)
 
@@ -72,41 +76,29 @@ The application uses the following environment variables:
 
 **Note**: The application supports both server-side API key configuration (via `.env` file) and client-side API key management. Server-side configuration takes precedence if available.
 
-### API Key Configuration
-
-The application supports two ways to configure your Claude API key:
-
-1. **Server-side (Recommended for production)**
-   - Set `ANTHROPIC_API_KEY` in your `.env` file
-   - The API key is stored securely on the server
-   - Users don't need to enter their own API key
-   - Better for shared deployments or production environments
-
-2. **Client-side (Default behavior)**
-   - Users enter their API key through the web interface
-   - API key is stored in browser localStorage
-   - More flexible for individual users
-   - Works when server-side key is not configured
-
-The application automatically detects which method is available and adjusts the user interface accordingly.
-
 ## How to Use
 
-### Creating Flashcards
+### Creating a New Deck
 
-1. Paste text into the input area
-2. Highlight a section of text
-3. Click "Create Cards"
-4. Review and edit the generated cards
-5. Optionally change the deck for any card by clicking the deck label
-6. Use the dropdown menu to export to Anki (TSV format) or as markdown
-7. Import the downloaded TSV file into Anki using File → Import
+1. **Start the Application**: Choose "Create New Named Deck"
+2. **Name Your Deck**: Enter a descriptive name (creates `DeckName.tsv`)
+3. **Add Content**: Paste your study material (supports up to 15,000 words)
+4. **Generate Cards**: Highlight text sections and click "Create Cards"
+5. **Edit & Organize**: Modify cards inline, change deck assignments as needed
+6. **Save**: Click "Save" to update your TSV file
+
+### Loading Existing Decks
+
+1. **Load Deck**: Choose "Load Existing TSV File"
+2. **Select File**: Pick your existing TSV file from anywhere on your computer
+3. **Continue Working**: Add new content and generate additional cards
+4. **Save Updates**: Cards are saved back to the same file (or incremented version)
 
 ### Anki Import Instructions
 
 1. Open Anki desktop application
 2. Go to File → Import
-3. Select the downloaded TSV file (e.g., `anki-cards-2024-01-15.txt`)
+3. Select your TSV file (e.g., `Biology.tsv`)
 4. Configure import settings:
    - **Type**: Basic (and reversed card)
    - **Deck**: Choose your target deck or create a new one
@@ -114,7 +106,49 @@ The application automatically detects which method is available and adjusts the 
    - **Allow HTML in fields**: Yes (recommended for formatting)
 5. Click Import to add the cards to your Anki collection
 
-The TSV format includes three columns: Front, Back, and Deck. Each card's deck assignment will be preserved during import.
+## Browser Compatibility
+
+### **Advanced Mode** (Chrome, Edge, Opera)
+- ✅ True file overwriting - save button updates the same file
+- ✅ Native file dialogs - choose exactly where to save files
+- ✅ Persistent file access - remembers your file across sessions
+
+### **Compatibility Mode** (Firefox, Safari, Mobile)
+- ✅ Smart incremental naming - `Biology-2.tsv`, `Biology-3.tsv`
+- ✅ Full functionality - same workflow, different file handling
+- ✅ Clear feedback - notifications explain file naming behavior
+
+## Next Steps
+
+### **Enhanced Question Types**
+Currently, the application focuses on basic knowledge and definition cards. To improve learning effectiveness and prevent cognitive plateaus, we plan to expand question types across Bloom's Taxonomy levels:
+
+- **Comprehension**: "Explain why X works" or "Summarize the relationship between A and B"
+- **Application**: "How would you use X in scenario Y?" or "What steps would you take to..."
+- **Analysis**: "Compare and contrast X vs Y" or "What are the dependencies between..."
+- **Evaluation**: "What are the trade-offs of approach X?" or "When would method A be better than B?"
+
+### **Agent-Based Architecture**
+To handle this cognitive complexity, we're exploring specialized AI agents:
+- **Question Type Strategist**: Determines optimal cognitive level distribution
+- **Domain Expert Agent**: Understands subject-specific relationships
+- **Bloom's Taxonomy Specialist**: Crafts questions targeting specific cognitive levels
+- **Learning Science Agent**: Ensures appropriate difficulty progression
+
+Implementation will likely use frameworks like KaibanJS or AgenticJS for agent orchestration.
+
+### **Advanced Card Management UI**
+Enhanced interface features for granular control:
+- **Individual Card Actions**: Select specific cards to modify, expand, or change question types
+- **Subset Text Processing**: Highlight portions of input text for targeted card generation
+- **Context Expansion**: Generate additional cards that broaden or deepen understanding of selected concepts
+- **Question Type Toggle**: Convert existing cards between different cognitive levels
+- **Batch Operations**: Apply changes to multiple cards simultaneously
+
+### **Learning Analytics**
+- **Performance Tracking**: Monitor which question types are most effective
+- **Adaptive Difficulty**: Adjust question complexity based on user mastery
+- **Spaced Repetition Optimization**: Intelligent scheduling recommendations
 
 ## Design Principles
 
@@ -123,14 +157,14 @@ This application follows established principles for effective spaced repetition 
 - **Atomicity**: Each card tests one specific concept
 - **Clarity**: Cards use precise language focused on understanding
 - **Connections**: Building relationships between concepts
-- **Deep Understanding**: Emphasizing "why" and "how" questions
+- **Progressive Complexity**: Supporting advancement through cognitive levels
 
 The UI design prioritizes:
 
-- Simplicity and focus on the core functionality
-- Mobile-responsive layout that works on any device
-- Space efficiency with compact card design
-- Intuitive interactions with minimal learning curve
+- **Simplicity**: Focus on core functionality without overwhelming options
+- **Mobile-Responsive**: Seamless experience across all devices
+- **Space Efficiency**: Compact card design maximizing screen real estate
+- **Intuitive Interactions**: Minimal learning curve for new users
 
 ## License
 

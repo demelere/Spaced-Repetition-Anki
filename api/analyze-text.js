@@ -57,7 +57,8 @@ module.exports = async (req, res) => {
     // Get API key (server-side preferred, fallback to client-provided)
     const apiKey = getApiKey(userApiKey);
     
-    const truncatedText = truncateText(text, 10000);
+    // Truncate text to handle up to 15,000 words (approximately 75,000 characters)
+    const truncatedText = truncateText(text, 75000);
     
     const userPrompt = `Please analyze this text and provide a concise contextual summary (1-2 paragraphs maximum):
 
@@ -87,7 +88,10 @@ ${truncatedText}`;
     } catch (apiError) {
       // Handle axios errors
       if (apiError.code === 'ECONNABORTED') {
-        return res.status(504).json({ error: 'Request to Claude API timed out. Try with a smaller text.' });
+        return res.status(504).json({ 
+          error: 'Request to Claude API timed out after 9 seconds. This can happen with very complex or lengthy text processing.',
+          suggestion: 'For best results with large texts, try breaking them into sections of 5,000-10,000 words each.'
+        });
       }
       
       if (apiError.response) {

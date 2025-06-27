@@ -19,9 +19,9 @@ FOR MEDIUM TEXT: Generate 5-10 total cards
 - 3-6 core concept cards covering main themes  
 - 2-4 conceptual mapping cards (hierarchies, relationships, comparisons)
 
-FOR EXTENSIVE TEXT: Generate 8-15 total cards
-- 5-9 core concept cards covering key themes
-- 3-6 conceptual mapping cards (taxonomies, dependencies, mental models)
+FOR EXTENSIVE TEXT: Generate 10-20 total cards
+- 6-12 core concept cards covering key themes
+- 4-8 conceptual mapping cards (taxonomies, dependencies, mental models)
 
 CONCEPTUAL MAPPING CARDS should focus on:
 - Hierarchies: "What foundational concepts does X build upon?"
@@ -35,7 +35,7 @@ Your task is to generate effective flashcards from the highlighted text excerpt,
 
 Guidelines for creating excellent flashcards:
 • Be EXTREMELY concise - answers should be 1-2 sentences maximum!
-• Focus on core concepts, relationships, and techniques rather than trivia or isolated facts
+• Focus on core concepts, relationships, and techniques rather than trivia or isolated facts (e.g. bio on podcast speakers)
 • Break complex ideas into smaller, atomic concepts
 • Ensure each card tests one specific idea (atomic)
 • Front of card should ask a specific question that prompts recall
@@ -77,7 +77,7 @@ Example of expected JSON format:
   }
 ]
 
-Generate between 1-5 cards depending on the complexity and amount of content in the highlighted text.
+Generate between 3-20 cards depending on the complexity and amount of content in the highlighted text.
 Your response MUST BE ONLY valid JSON - no introduction, no explanation, no markdown formatting.`,
 
   ANALYSIS: `You analyze text to extract key contextual information. Create a concise 1-2 paragraph summary that includes: the author/source if identifiable, the main thesis or argument, key points, and relevant background. This summary will serve as context for future interactions with sections of this text.`
