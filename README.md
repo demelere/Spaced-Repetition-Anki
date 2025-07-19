@@ -5,7 +5,7 @@ A streamlined web application for creating high-quality spaced repetition flashc
 ## Features
 
 ### **Smart Card Generation**
-- Intelligent Text Analysis: Paste large documents (up to 15,000 words) and get contextual analysis
+- Paste large documents (up to 15,000 words) and get contextual analysis
 - Adaptive Card Creation: Generates 3-20 cards based on text complexity and length
 - Multiple Card Types: Core concepts, definitions, and conceptual mapping cards (relationships, hierarchies, analogies)
 - Real-time Editing: Edit cards inline before saving - modify questions, answers, and deck assignments
@@ -15,13 +15,6 @@ A streamlined web application for creating high-quality spaced repetition flashc
 - Named Deck Creation: Create custom-named TSV files with upfront file structure
 - Existing File Loading: Load and continue working with existing TSV files
 - Persistent Workflow: Save additions to the same file or create versioned copies
-
-### **Modern User Interface**
-- Clean, Intuitive Design: Streamlined workflow with dropdown menu navigation
-- Mobile-Responsive Layout: Works seamlessly across devices
-- Real-time Notifications: Clear feedback for all operations
-- Resizable Panels: Comfortable editing with adjustable text/card areas
-- Visual Mode Indicators: Shows whether true file overwriting or incremental naming is active
 
 ### **Export & Integration**
 - TSV Format: Direct compatibility with Anki import
@@ -109,7 +102,46 @@ The application uses the following environment variables:
 ## Browser Compatibility
 Chrome, Edge, and Opera support advanced features including true file overwriting, native file dialogs, and persistent file access across sessions. Firefox, Safari, and mobile browsers use compatibility mode with smart incremental naming (e.g., `Biology-2.tsv`, `Biology-3.tsv`) while maintaining full functionality and providing clear feedback about file handling behavior.
 
+## Extension Integration
+
+### Obsidian Web Clipper Integration
+The app now supports receiving text from the Obsidian Web Clipper extension:
+
+1. **Fork the Obsidian Web Clipper** and add a "Send to Flashcard App" action
+2. **Configure the extension** to send text to `http://localhost:34567/api/ingest`
+3. **Use the workflow**:
+   - Highlight text on any webpage
+   - Click the extension's "Send to Flashcard App" button
+   - The text is sent to your local server
+   - Open your flashcard app to see the pre-filled text ready for card generation
+
+### Quick Start Script
+Use the included startup script for easy access:
+
+```bash
+# Make the script executable (one-time setup)
+chmod +x start-flashcards.sh
+
+# Start the app on port 34567 and open Chrome
+./start-flashcards.sh
+```
+
+### Manual Startup
+```bash
+# Start on custom port
+PORT=34567 npm start
+
+# Or use the npm script
+npm run flashcards
+```
+
+The app runs on `http://localhost:34567` to avoid conflicts with other development servers.
+
 ## Next Steps
+
+### Various fixes
+* How to remember an exact relationship, an exact thing
+* 
 
 ### **Enhanced Question Types**
 Currently, the application focuses on basic knowledge and definition cards. To improve learning effectiveness and prevent cognitive plateaus, we plan to expand question types across Bloom's Taxonomy levels:
