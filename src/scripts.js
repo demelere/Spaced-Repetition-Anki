@@ -92,6 +92,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Settings button opens the API key modal
     settingsButton.addEventListener('click', showApiKeyModal);
     
+    // Clipped texts button shows available clipped texts
+    const clippedTextsButton = document.getElementById('clippedTextsButton');
+    clippedTextsButton.addEventListener('click', showClippedTextsModal);
+    
+    // Close button for clipped texts modal
+    const clippedTextsClose = document.getElementById('clippedTextsClose');
+    clippedTextsClose.addEventListener('click', () => {
+        document.getElementById('clippedTextsModal').style.display = 'none';
+    });
+    
     // Save button in API key modal
     apiKeySaveButton.addEventListener('click', async () => {
         const anthropicKey = anthropicApiKeyInput.value.trim();
@@ -154,6 +164,260 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Show the modal
         apiKeyModal.style.display = 'flex';
+    }
+    
+    // Show clipped texts modal
+    async function showClippedTextsModal() {
+        try {
+            const modal = document.getElementById('clippedTextsModal');
+            const listContainer = document.getElementById('clippedTextsList');
+            
+            // Show loading state
+            listContainer.innerHTML = '<div class="clipped-text-empty">Loading...</div>';
+            modal.style.display = 'flex';
+            
+            // Fetch available clipped texts
+            const response = await fetch('/api/clipped-texts');
+            
+            if (response.ok) {
+                const result = await response.json();
+                const clips = result.clips;
+                
+                if (clips.length === 0) {
+                    listContainer.innerHTML = `
+                        <div class="clipped-text-empty">
+                            <div class="icon">📋</div>
+                            <div>No clipped texts available</div>
+                            <div style="font-size: 12px; margin-top: 8px;">
+                                Use the Obsidian Web Clipper extension to send text here
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Render clipped texts
+                    listContainer.innerHTML = clips.map(clip => `
+                        <div class="clipped-text-item" data-clip-id="${clip.id}">
+                            <div class="clipped-text-header">
+                                <div>
+                                    <div class="clipped-text-title">${clip.title || 'Untitled'}</div>
+                                    <div class="clipped-text-meta">
+                                        <span class="clipped-text-timestamp">${formatTimestamp(clip.timestamp)}</span>
+                                        <span class="clipped-text-source">${clip.source}</span>
+                                        ${clip.url ? `<a href="${clip.url}" target="_blank" style="color: var(--primary-color); text-decoration: none; margin-left: 8px;">🔗</a>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="clipped-text-preview">
+                                ${clip.textLength > 200 ? clip.textLength + ' characters' : 'Short text'}
+                            </div>
+                        </div>
+                    `).join('');
+                    
+                    // Add click handlers for each clipped text item
+                    listContainer.querySelectorAll('.clipped-text-item').forEach(item => {
+                        item.addEventListener('click', async () => {
+                            const clipId = item.dataset.clipId;
+                            await loadClippedText(clipId);
+                            modal.style.display = 'none';
+                        });
+                    });
+                }
+            } else {
+                listContainer.innerHTML = `
+                    <div class="clipped-text-empty">
+                        <div class="icon">⚠️</div>
+                        <div>Failed to load clipped texts</div>
+                        <div style="font-size: 12px; margin-top: 8px;">
+                            Please try again later
+                        </div>
+                    </div>
+                `;
+            }
+        } catch (error) {
+            console.error('Error showing clipped texts modal:', error);
+            const listContainer = document.getElementById('clippedTextsList');
+            listContainer.innerHTML = `
+                <div class="clipped-text-empty">
+                    <div class="icon">⚠️</div>
+                    <div>Error loading clipped texts</div>
+                    <div style="font-size: 12px; margin-top: 8px;">
+                        ${error.message}
+                    </div>
+                </div>
+            `;
+        }
+    }
+    
+    // Load a specific clipped text
+    async function loadClippedText(clipId) {
+        try {
+            const response = await fetch(`/api/clipped-text/${clipId}`);
+            
+            if (response.ok) {
+                const result = await response.json();
+                const clippedData = result.data;
+                
+                // Use the same workflow logic as the URL-based loading
+                await handleClippedTextLoad(clippedData, clipId);
+                
+            } else {
+                showNotification('Failed to load clipped text. It may have expired.', 'error');
+            }
+        } catch (error) {
+            console.error('Error loading clipped text:', error);
+            showNotification('Error loading clipped text', 'error');
+        }
+    }
+    
+    // Helper function to format timestamp
+    function formatTimestamp(timestamp) {
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diffMs = now - date;
+        const diffMins = Math.floor(diffMs / 60000);
+        const diffHours = Math.floor(diffMs / 3600000);
+        
+        if (diffMins < 1) {
+            return 'Just now';
+        } else if (diffMins < 60) {
+            return `${diffMins}m ago`;
+        } else if (diffHours < 24) {
+            return `${diffHours}h ago`;
+        } else {
+            return date.toLocaleDateString();
+        }
+    }
+    
+    // Set up continuous monitoring for incoming clipped texts using SSE
+    function setupClippedTextMonitoring() {
+        let lastUrl = window.location.href;
+        let sseConnection = null;
+        
+        // Check for URL changes (for direct links from extension)
+        const checkUrlChange = () => {
+            const currentUrl = window.location.href;
+            if (currentUrl !== lastUrl) {
+                console.log('URL changed, checking for clipped text...');
+                lastUrl = currentUrl;
+                checkForClippedText();
+            }
+        };
+        
+        // Set up SSE connection for real-time updates
+        function setupSSEConnection() {
+            try {
+                sseConnection = new EventSource('/api/clipped-texts/stream');
+                
+                sseConnection.onopen = function(event) {
+                    console.log('SSE connection established');
+                };
+                
+                sseConnection.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('SSE message received:', data);
+                        
+                        switch(data.type) {
+                            case 'connected':
+                                console.log('SSE connection confirmed');
+                                break;
+                                
+                            case 'new-clip':
+                                console.log('New clip received via SSE:', data.data);
+                                if (!document.hidden) {
+                                    const sourceInfo = data.data.title || data.data.source || 'webpage';
+                                    showNotification(`New text received from ${sourceInfo}. Click "Clipped Texts" in the menu to view.`, 'info', 8000);
+                                }
+                                break;
+                                
+                            default:
+                                console.log('Unknown SSE message type:', data.type);
+                        }
+                    } catch (error) {
+                        console.error('Error parsing SSE message:', error);
+                    }
+                };
+                
+                sseConnection.onerror = function(error) {
+                    console.error('SSE connection error:', error);
+                    // Reconnect after 5 seconds
+                    setTimeout(() => {
+                        if (sseConnection) {
+                            sseConnection.close();
+                        }
+                        setupSSEConnection();
+                    }, 5000);
+                };
+                
+            } catch (error) {
+                console.error('Failed to set up SSE connection:', error);
+                // Fallback to polling if SSE fails
+                setupPollingFallback();
+            }
+        }
+        
+        // Fallback polling method if SSE fails
+        function setupPollingFallback() {
+            console.log('Using polling fallback for clipped text monitoring');
+            let lastClipCount = 0;
+            
+            const pollForNewClips = async () => {
+                try {
+                    const response = await fetch('/api/clipped-texts');
+                    if (response.ok) {
+                        const result = await response.json();
+                        const currentClipCount = result.count;
+                        
+                        if (currentClipCount > lastClipCount && !document.hidden) {
+                            const newClips = currentClipCount - lastClipCount;
+                            showNotification(`${newClips} new clipped text${newClips > 1 ? 's' : ''} received. Click "Clipped Texts" in the menu to view.`, 'info', 8000);
+                        }
+                        
+                        lastClipCount = currentClipCount;
+                    }
+                } catch (error) {
+                    console.warn('Error polling for new clips:', error);
+                }
+            };
+            
+            setInterval(pollForNewClips, 3000);
+        }
+        
+        // Set up URL change detection
+        const originalPushState = history.pushState;
+        const originalReplaceState = history.replaceState;
+        
+        history.pushState = function(...args) {
+            originalPushState.apply(history, args);
+            setTimeout(checkUrlChange, 100);
+        };
+        
+        history.replaceState = function(...args) {
+            originalReplaceState.apply(history, args);
+            setTimeout(checkUrlChange, 100);
+        };
+        
+        window.addEventListener('popstate', checkUrlChange);
+        
+        // Set up SSE connection
+        setupSSEConnection();
+        
+        // Also check when page becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                console.log('Page became visible, checking for clipped text...');
+                checkForClippedText();
+            }
+        });
+        
+        // Clean up SSE connection when page unloads
+        window.addEventListener('beforeunload', () => {
+            if (sseConnection) {
+                sseConnection.close();
+            }
+        });
+        
+        console.log('SSE-based clipped text monitoring set up');
     }
     
     function updateUiForApiKeys() {
@@ -396,6 +660,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize UI and fetch decks
     updateButtonStates();
     
+    // Check for clipped text from extension on startup
+    console.log('App initialized, checking for clipped text...');
+    checkForClippedText();
+    
+    // Set up continuous monitoring for incoming clipped texts
+    setupClippedTextMonitoring();
+    
     // Fetch decks from Mochi API on startup
     fetchDecks().catch(error => {
         console.error('Error initializing decks:', error);
@@ -410,6 +681,107 @@ document.addEventListener('DOMContentLoaded', () => {
             state.currentDeck = Object.keys(state.decks)[0];
         }
         // No UI elements to create here anymore
+    }
+    
+    // Check for clipped text from the extension
+    async function checkForClippedText() {
+        try {
+            // Check if there's a clipId in the URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const clipId = urlParams.get('clipId');
+            
+            console.log('Checking for clipped text. URL:', window.location.href);
+            console.log('URL search params:', window.location.search);
+            console.log('Found clipId:', clipId);
+            
+            if (clipId) {
+                console.log('Found clipId in URL, loading clipped text:', clipId);
+                
+                // Fetch the clipped text from the server
+                const response = await fetch(`/api/clipped-text/${clipId}`);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    const clippedData = result.data;
+                    
+                    // Handle different scenarios based on current app state
+                    await handleClippedTextLoad(clippedData, clipId);
+                    
+                } else {
+                    console.error('Failed to load clipped text:', response.status);
+                    showNotification('Failed to load clipped text. It may have expired.', 'error');
+                }
+            }
+        } catch (error) {
+            console.error('Error checking for clipped text:', error);
+        }
+    }
+    
+    // Handle loading clipped text with proper workflow management
+    async function handleClippedTextLoad(clippedData, clipId) {
+        console.log('handleClippedTextLoad called with:', { clipId, clippedData });
+        
+        // Always prioritize new text - clear existing content
+        const hadExistingText = state.editor ? state.editor.getText().trim().length > 0 : (textInput.textContent || '').trim().length > 0;
+        const hadExistingCards = state.cards.length > 0;
+        const hasDeckSelected = state.currentDeck && Object.keys(state.decks).length > 0;
+        
+        console.log('Current state:', { hadExistingText, hadExistingCards, hasDeckSelected });
+        
+        // Clear existing cards if any
+        if (hadExistingCards) {
+            state.cards = [];
+            renderCards();
+            updateButtonStates();
+        }
+        
+        // Load the new text into the editor
+        if (state.editor) {
+            // Use Quill editor
+            state.editor.setText(clippedData.text);
+        } else {
+            // Fallback to contenteditable
+            textInput.textContent = clippedData.text;
+        }
+        
+        // Show appropriate notification based on what was replaced
+        const sourceInfo = clippedData.title || clippedData.source || 'webpage';
+        let notificationMessage = `Loaded text from ${sourceInfo}`;
+        
+        if (hadExistingText || hadExistingCards) {
+            notificationMessage += ' (replaced existing content)';
+        }
+        
+        showNotification(notificationMessage, 'success', 5000);
+        
+        // Analyze the text for context
+        if (clippedData.text.length > 100) {
+            await analyzeDocumentContext(clippedData.text);
+        }
+        
+        // Handle deck selection if needed
+        if (!hasDeckSelected) {
+            // Show deck selection modal immediately
+            showNotification('Please select a deck to continue', 'info', 3000);
+            setTimeout(() => {
+                showFileSelectionModal();
+            }, 1000);
+        } else {
+            // Deck is already selected, ready to generate cards
+            showNotification('Ready to generate cards. Highlight text and click "Create Cards"', 'success', 4000);
+        }
+        
+        // Clean up the URL (remove the clipId parameter)
+        const newUrl = new URL(window.location);
+        newUrl.searchParams.delete('clipId');
+        window.history.replaceState({}, '', newUrl);
+        
+        // Delete the clipped text from server storage
+        try {
+            await fetch(`/api/clipped-text/${clipId}`, { method: 'DELETE' });
+        } catch (deleteError) {
+            console.warn('Failed to delete clipped text from server:', deleteError);
+        }
     }
     
     // Set up the resizable splitter

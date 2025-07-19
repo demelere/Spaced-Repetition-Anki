@@ -20,6 +20,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const fetch = require('node-fetch');
+const { exec } = require('child_process');
 
 // Import shared prompts and API configuration
 const { API_CONFIG } = require('../prompts');
@@ -124,6 +125,13 @@ async function callClaudeApi(systemPrompt, userPrompt, apiKey, maxTokens = 4000,
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// In-memory storage for clipped text (for extension integration)
+// This stores text temporarily until the frontend retrieves it
+const clippedTextStorage = new Map();
+
+// SSE clients for real-time notifications
+const sseClients = new Set();
+
 // Configure middleware
 app.use(cors({
   origin: [
@@ -146,6 +154,240 @@ app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
+
+// EXTENSION INTEGRATION ENDPOINTS
+
+// SSE endpoint for real-time updates
+app.get('/api/clipped-texts/stream', (req, res) => {
+  // Set up SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Cache-Control'
+  });
+
+  // Send initial connection message
+  res.write('data: {"type": "connected", "message": "SSE connection established"}\n\n');
+
+  // Add client to connected set
+  sseClients.add(res);
+  console.log(`SSE client connected. Total clients: ${sseClients.size}`);
+
+  // Handle client disconnect
+  req.on('close', () => {
+    sseClients.delete(res);
+    console.log(`SSE client disconnected. Total clients: ${sseClients.size}`);
+  });
+
+  // Handle client error
+  req.on('error', (error) => {
+    console.warn('SSE client error:', error);
+    sseClients.delete(res);
+  });
+});
+
+// API endpoint for receiving clipped text from Obsidian Web Clipper extension
+app.post('/api/ingest', async (req, res) => {
+  try {
+    const { text, source, title, url } = req.body;
+    
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+    
+    // Generate a unique ID for this clipped text
+    const clipId = Date.now().toString() + Math.random().toString(36).substr(2, 9);
+    
+    // Store the clipped text with metadata
+    clippedTextStorage.set(clipId, {
+      text: text,
+      source: source || 'webpage',
+      title: title || 'Clipped Content',
+      url: url || '',
+      timestamp: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000) // Expires in 30 minutes
+    });
+    
+    console.log(`Received clipped text (ID: ${clipId}): ${text.length} characters from ${source || 'unknown source'}`);
+    
+    // Clean up expired entries
+    cleanupExpiredClips();
+    
+    // Notify all connected SSE clients about the new clip
+    notifyClients('new-clip', {
+      clipId: clipId,
+      title: clippedTextStorage.get(clipId).title,
+      source: clippedTextStorage.get(clipId).source,
+      textLength: clippedTextStorage.get(clipId).text.length,
+      timestamp: clippedTextStorage.get(clipId).timestamp
+    });
+    
+    // Automatically open the frontend app in browser
+    openFrontendApp(clipId);
+    
+    res.json({
+      success: true,
+      clipId: clipId,
+      message: 'Text received successfully. The flashcard app will open automatically.',
+      appUrl: `http://localhost:${PORT}/?clipId=${clipId}`
+    });
+    
+  } catch (error) {
+    console.error('Server error during text ingestion:', error);
+    res.status(500).json({ 
+      error: error.message
+    });
+  }
+});
+
+// API endpoint for retrieving clipped text by ID
+app.get('/api/clipped-text/:clipId', (req, res) => {
+  try {
+    const { clipId } = req.params;
+    
+    if (!clipId) {
+      return res.status(400).json({ error: 'Clip ID is required' });
+    }
+    
+    const clippedData = clippedTextStorage.get(clipId);
+    
+    if (!clippedData) {
+      return res.status(404).json({ error: 'Clipped text not found or expired' });
+    }
+    
+    // Check if expired
+    if (new Date() > new Date(clippedData.expiresAt)) {
+      clippedTextStorage.delete(clipId);
+      return res.status(404).json({ error: 'Clipped text has expired' });
+    }
+    
+    // Return the clipped data
+    res.json({
+      success: true,
+      data: clippedData
+    });
+    
+  } catch (error) {
+    console.error('Server error retrieving clipped text:', error);
+    res.status(500).json({ 
+      error: error.message
+    });
+  }
+});
+
+// API endpoint to list all available clipped texts
+app.get('/api/clipped-texts', (req, res) => {
+  try {
+    // Clean up expired entries first
+    cleanupExpiredClips();
+    
+    // Return list of available clips
+    const clips = Array.from(clippedTextStorage.entries()).map(([id, data]) => ({
+      id: id,
+      title: data.title,
+      source: data.source,
+      url: data.url,
+      timestamp: data.timestamp,
+      textLength: data.text.length
+    }));
+    
+    res.json({
+      success: true,
+      clips: clips,
+      count: clips.length
+    });
+    
+  } catch (error) {
+    console.error('Server error listing clipped texts:', error);
+    res.status(500).json({ 
+      error: error.message
+    });
+  }
+});
+
+// API endpoint to delete a specific clipped text
+app.delete('/api/clipped-text/:clipId', (req, res) => {
+  try {
+    const { clipId } = req.params;
+    
+    if (!clipId) {
+      return res.status(400).json({ error: 'Clip ID is required' });
+    }
+    
+    const deleted = clippedTextStorage.delete(clipId);
+    
+    if (deleted) {
+      res.json({
+        success: true,
+        message: 'Clipped text deleted successfully'
+      });
+    } else {
+      res.status(404).json({ error: 'Clipped text not found' });
+    }
+    
+  } catch (error) {
+    console.error('Server error deleting clipped text:', error);
+    res.status(500).json({ 
+      error: error.message
+    });
+  }
+});
+
+// Helper function to clean up expired clips
+function cleanupExpiredClips() {
+  const now = new Date();
+  for (const [id, data] of clippedTextStorage.entries()) {
+    if (now > new Date(data.expiresAt)) {
+      clippedTextStorage.delete(id);
+      console.log(`Cleaned up expired clip: ${id}`);
+    }
+  }
+}
+
+// Function to notify all connected SSE clients
+function notifyClients(eventType, data) {
+  const message = JSON.stringify({ type: eventType, data, timestamp: new Date().toISOString() });
+  sseClients.forEach(client => {
+    try {
+      client.write(`data: ${message}\n\n`);
+    } catch (error) {
+      console.warn('Failed to send SSE message to client:', error);
+      // Remove disconnected client
+      sseClients.delete(client);
+    }
+  });
+}
+
+// Function to open the frontend app in browser
+function openFrontendApp(clipId) {
+  const appUrl = `http://localhost:${PORT}/?clipId=${clipId}`;
+  
+  // Determine the platform and open browser accordingly
+  const platform = process.platform;
+  let command;
+  
+  if (platform === 'darwin') {
+    // macOS
+    command = `open "${appUrl}"`;
+  } else if (platform === 'win32') {
+    // Windows
+    command = `start "${appUrl}"`;
+  } else {
+    // Linux and others
+    command = `xdg-open "${appUrl}"`;
+  }
+  
+  exec(command, (error, stdout, stderr) => {
+    if (error) {
+      console.warn('Failed to open browser automatically:', error);
+      console.log(`Please manually open: ${appUrl}`);
+    } else {
+      console.log(`Opened frontend app in browser: ${appUrl}`);
+    }
+  });
+}
 
 // CLAUDE API ENDPOINTS
 
