@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node server/server.js",
     "dev": "nodemon server/server.js",
-    "build": "echo 'Build completed'"
+    "build": "echo 'Build completed'",
+    "flashcards": "PORT=34567 node server/server.js & sleep 2 && open http://localhost:34567"
   },
   "dependencies": {
     "axios": "^1.8.3",
