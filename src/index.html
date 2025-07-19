@@ -31,6 +31,7 @@
                             <div class="dropdown-menu" id="dropdown-menu">
                                 <button id="exportButton" disabled class="dropdown-item">Export to Anki</button>
                                 <button id="clearCardsButton" disabled class="dropdown-item">Clear Cards</button>
+                                <button id="clippedTextsButton" class="dropdown-item">Clipped Texts</button>
                                 <button id="settingsButton" class="dropdown-item">API Keys</button>
                             </div>
                         </div>
@@ -96,6 +97,26 @@
                 <div class="api-key-actions">
                     <button id="apiKeyCancel" class="api-key-button secondary">Cancel</button>
                     <button id="apiKeySave" class="api-key-button primary">Save API Keys</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Clipped Texts Modal -->
+    <div id="clippedTextsModal" class="api-key-overlay" style="display: none;">
+        <div class="api-key-container">
+            <div class="api-key-header">
+                <h2>Clipped Texts</h2>
+                <div class="security-disclaimer">
+                    Text clips from the Obsidian Web Clipper extension
+                </div>
+            </div>
+            <div class="clipped-texts-content">
+                <div id="clippedTextsList" class="clipped-texts-list">
+                    <!-- Clipped texts will be loaded here -->
+                </div>
+                <div class="clipped-texts-actions">
+                    <button id="clippedTextsClose" class="api-key-button secondary">Close</button>
                 </div>
             </div>
         </div>
