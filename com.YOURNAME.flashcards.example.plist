@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.YOURNAME.flashcards</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Users/YOURNAME/PATH/TO/start-flashcards.sh</string>
+    </array>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/Users/YOURNAME/.nvm/versions/node/vXX.XX.XX/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>PORT</key>
+        <string>34567</string>
+    </dict>
+    <key>WorkingDirectory</key>
+    <string>/Users/YOURNAME/PATH/TO/Spaced-Repetition-Anki</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/tmp/flashcards.log</string>
+    <key>StandardErrorPath</key>
+    <string>/tmp/flashcards.err</string>
+</dict>
+</plist> 

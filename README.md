@@ -4,28 +4,18 @@ A streamlined web application for creating high-quality spaced repetition flashc
 
 ## Features
 
-### **Smart Card Generation**
-- Paste large documents (up to 15,000 words) and get contextual analysis
-- Adaptive Card Creation: Generates 3-20 cards based on text complexity and length
-- Multiple Card Types: Core concepts, definitions, and conceptual mapping cards (relationships, hierarchies, analogies)
-- Real-time Editing: Edit cards inline before saving - modify questions, answers, and deck assignments
-
-### **File Management**
-- Progressive Enhancement: True file overwriting on modern browsers (Chrome/Edge), smart incremental naming on others
-- Named Deck Creation: Create custom-named TSV files with upfront file structure
-- Existing File Loading: Load and continue working with existing TSV files
-- Persistent Workflow: Save additions to the same file or create versioned copies
-
-### **Export & Integration**
-- TSV Format: Direct compatibility with Anki import
-- Markdown Fallback: Alternative export format when needed
-- Deck Organization: Automatic categorization with editable deck assignments
+- Paste large documents (up to 15,000 words)
+- Generates 3-20 cards based on text complexity and length
+- Multiple card types, like core concepts, definitions, and conceptual mapping cards (relationships, hierarchies, analogies)
+- Edit cards inline before saving if you want more control over the card content
+- File overwriting on Chrome/Edge, and incremental naming on others
+- Compatibility w/Anki import is the key, so TSV files are the source of truth.  Allows named TSV deck creation or loading existing TSV files and saving edits/additions to the same files
 
 ## Getting Started
 
 ### Prerequisites
 
-- Modern web browser (Chrome/Edge recommended for advanced file features)
+- Chrome/Edge
 - Claude API key from Anthropic
 - Anki desktop application (to import the generated cards)
 
@@ -73,19 +63,19 @@ The application uses the following environment variables:
 
 ### Creating a New Deck
 
-1. **Start the Application**: Choose "Create New Named Deck"
-2. **Name Your Deck**: Enter a descriptive name (creates `DeckName.tsv`)
-3. **Add Content**: Paste your study material (supports up to 15,000 words)
-4. **Generate Cards**: Highlight text sections and click "Create Cards"
-5. **Edit & Organize**: Modify cards inline, change deck assignments as needed
-6. **Save**: Click "Save" to update your TSV file
+1. Choose "Create New Named Deck"
+2. Enter a descriptive name (creates `DeckName.tsv`)
+3. Paste your study material (supports up to 15,000 words)
+4. Highlight text sections and click "Create Cards"
+5. Modify cards inline, change deck assignments as needed
+6. Click "Save" to update your TSV file
 
 ### Loading Existing Decks
 
-1. **Load Deck**: Choose "Load Existing TSV File"
-2. **Select File**: Pick your existing TSV file from anywhere on your computer
-3. **Continue Working**: Add new content and generate additional cards
-4. **Save Updates**: Cards are saved back to the same file (or incremented version)
+1. Choose "Load Existing TSV File"
+2. Pick your existing TSV file from anywhere on your computer
+3. Add new content and generate additional cards
+4. Cards are saved back to the same file (or incremented version)
 
 ### Anki Import Instructions
 
@@ -93,10 +83,10 @@ The application uses the following environment variables:
 2. Go to File → Import
 3. Select your TSV file (e.g., `Biology.tsv`)
 4. Configure import settings:
-   - **Type**: Basic (and reversed card)
-   - **Deck**: Choose your target deck or create a new one
-   - **Fields separated by**: Tab
-   - **Allow HTML in fields**: Yes (recommended for formatting)
+   - Basic (and reversed card)
+   - Choose your target deck or create a new one
+   - Tab
+   - Yes (recommended for formatting)
 5. Click Import to add the cards to your Anki collection
 
 ## Browser Compatibility
@@ -137,22 +127,45 @@ npm run flashcards
 
 The app runs on `http://localhost:34567` to avoid conflicts with other development servers.
 
+## macOS Auto-Start & Menu Bar Integration (launchd + SwiftBar)
+
+### Why this setup?
+- **launchd** ensures the server is robustly managed, auto-starts at login, and restarts if it crashes.
+- **SwiftBar** provides a live menu bar icon for status, quick actions, and one-click access.
+- **Fractional sleep** after actions ensures the menu bar status is accurate without excessive polling.
+
+### How it works
+- A launchd plist manages the Node.js server as a persistent service.
+- The SwiftBar plugin uses `launchctl` to start/stop the service and checks the port for status.
+- The plugin uses `sfimage` for a clean, icon-only menu bar display.
+- After starting/stopping, a short `sleep` ensures the status is up-to-date before SwiftBar refreshes.
+
+### Example Files
+- See `flashcards.swiftbar.example.sh` in the project root for a SwiftBar plugin template.
+- See `com.YOURNAME.flashcards.example.plist` in the project root for a launchd plist template.
+
+### Key Decisions Explained
+- **launchd**: Handles process lifecycle, auto-restart, and login start.
+- **PATH in plist**: Ensures Node.js (from NVM) is found by launchd.
+- **Foreground server**: launchd tracks the process; no orphaned background jobs.
+- **sfimage in SwiftBar**: Clean, icon-only status in the menu bar.
+- **sleep after actions**: Ensures status is accurate before SwiftBar refreshes.
+- **No excessive polling**: Keeps UI responsive and efficient.
+
+---
+
 ## Next Steps
 
 ### Various fixes
 * How to remember an exact relationship, an exact thing
-* 
 
-### **Enhanced Question Types**
-Currently, the application focuses on basic knowledge and definition cards. To improve learning effectiveness and prevent cognitive plateaus, we plan to expand question types across Bloom's Taxonomy levels:
-
+Currently, the application focuses on basic knowledge and definition cards. To improve learning effectiveness and prevent cognitive plateaus, I plan to expand question types across Bloom's Taxonomy levels:
 - Comprehension: "Explain why X works" or "Summarize the relationship between A and B"
 - Application: "How would you use X in scenario Y?" or "What steps would you take to..."
 - Analysis: "Compare and contrast X vs Y" or "What are the dependencies between..."
 - Evaluation: "What are the trade-offs of approach X?" or "When would method A be better than B?"
 
-### **Agent-Based Architecture**
-To handle this cognitive complexity, we're exploring specialized AI agents:
+To handle this cognitive complexity, I'm exploring specialized AI agents:
 - Question Type Strategist: Determines optimal cognitive level distribution
 - Domain Expert Agent: Understands subject-specific relationships
 - Bloom's Taxonomy Specialist: Crafts questions targeting specific cognitive levels
@@ -160,7 +173,6 @@ To handle this cognitive complexity, we're exploring specialized AI agents:
 
 Implementation will likely use frameworks like KaibanJS or AgenticJS for agent orchestration.
 
-### **Advanced Card Management UI**
 Enhanced interface features for granular control:
 - Individual Card Actions: Select specific cards to modify, expand, or change question types
 - Subset Text Processing: Highlight portions of input text for targeted card generation
@@ -168,31 +180,5 @@ Enhanced interface features for granular control:
 - Question Type Toggle: Convert existing cards between different cognitive levels
 - Batch Operations: Apply changes to multiple cards simultaneously
 
-### **Learning Analytics**
-- Performance Tracking: Monitor which question types are most effective
-- Adaptive Difficulty: Adjust question complexity based on user mastery
-- Spaced Repetition Optimization: Intelligent scheduling recommendations
-
-### **Specialized Use Cases & Workflows**
 Tailored experiences for different learning modalities and information sources:
 - Language Learning: Vocabulary acquisition, grammar patterns, cultural context
-
-## Design Principles
-
-This application follows established principles for effective spaced repetition learning:
-
-- **Atomicity**: Each card tests one specific concept
-- **Clarity**: Cards use precise language focused on understanding
-- **Connections**: Building relationships between concepts
-- **Progressive Complexity**: Supporting advancement through cognitive levels
-
-The UI design prioritizes:
-
-- **Simplicity**: Focus on core functionality without overwhelming options
-- **Mobile-Responsive**: Seamless experience across all devices
-- **Space Efficiency**: Compact card design maximizing screen real estate
-- **Intuitive Interactions**: Minimal learning curve for new users
-
-## License
-
-MIT
