@@ -173,12 +173,9 @@ To handle this cognitive complexity, I'm exploring specialized AI agents:
 
 Implementation will likely use frameworks like KaibanJS or AgenticJS for agent orchestration.
 
-Enhanced interface features for granular control:
 - Individual Card Actions: Select specific cards to modify, expand, or change question types
-- Subset Text Processing: Highlight portions of input text for targeted card generation
-- Context Expansion: Generate additional cards that broaden or deepen understanding of selected concepts
+- Radial or Pie menu for granular control over specific subsets of input text for even more targeted card generation or or generating additional cards that broaden or deepen understanding of the selected concepts
 - Question Type Toggle: Convert existing cards between different cognitive levels
-- Batch Operations: Apply changes to multiple cards simultaneously
 
 Tailored experiences for different learning modalities and information sources:
 - Language Learning: Vocabulary acquisition, grammar patterns, cultural context
